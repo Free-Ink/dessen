@@ -22,6 +22,7 @@
 #define DSN_FONT_SMALL 0
 #define DSN_FONT_BODY 1
 #define DSN_FONT_TITLE 2
+#define DSN_FONT_CUSTOM 3  // the font a successful font_load() returns (one per app)
 
 #define DSN_ALIGN_LEFT 0
 #define DSN_ALIGN_CENTER 1
@@ -29,6 +30,8 @@
 
 #define DSN_TEXT_BOLD 1
 #define DSN_TEXT_INVERTED 2
+#define DSN_TEXT_ROT_CW90 4   // draw text rotated 90 CW (vertical, e.g. a book spine)
+#define DSN_TEXT_ROT_CCW90 8  // rotated 90 CCW (vertical, reads bottom-to-top)
 
 #define DSN_CORNERS_ALL 15
 
@@ -92,6 +95,17 @@ typedef struct {
 
 // text_input() flags
 #define DSN_INPUT_PASSWORD 1
+
+// open_home() destinations (the firmware's home-screen menu items).
+#define DSN_HOME_FILES 0
+#define DSN_HOME_LIBRARY 1
+#define DSN_HOME_PLUGINS 2
+#define DSN_HOME_OPDS 3
+#define DSN_HOME_TRANSFER 4
+#define DSN_HOME_SETTINGS 5
+
+// open_book/settings/browser/home return these only on failure (the call normally
+// ends the app). DSN_ERR_UNAVAILABLE means the host has no launcher.
 
 // battery() power state (second byte of the result)
 #define DSN_PWR_UNKNOWN  0

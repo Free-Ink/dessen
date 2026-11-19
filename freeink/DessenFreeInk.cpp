@@ -11,7 +11,7 @@ namespace {
 
 using namespace freeink::ui;
 
-enum { kExit = 1, kWait, kYield, kBusy }; // positive stop codes for dvm_run
+enum { kExit = 1, kWait, kYield, kBusy, kLaunch }; // positive stop codes for dvm_run
 constexpr uint32_t kStrMax = 200;  // longest text an app can pass in one call
 constexpr uint32_t kPathMax = 255; // longest storage path
 
@@ -102,11 +102,12 @@ Paint paint(uint32_t color) {
 
 TextStyle textStyle(uint32_t font, uint32_t align, uint32_t maxLines, uint32_t flags) {
   TextStyle st;
-  st.font = static_cast<FontId>(font <= DSN_FONT_TITLE ? font : DSN_FONT_SMALL);
+  st.font = static_cast<FontId>(font <= DSN_FONT_CUSTOM ? font : DSN_FONT_SMALL);
   st.align = align == DSN_ALIGN_CENTER ? TextAlign::Center : align == DSN_ALIGN_RIGHT ? TextAlign::Right : TextAlign::Left;
   st.maxLines = static_cast<uint8_t>(maxLines < 1 ? 1 : maxLines > 16 ? 16 : maxLines);
   st.bold = flags & DSN_TEXT_BOLD;
   st.inverted = flags & DSN_TEXT_INVERTED;
+  st.rotation = flags & DSN_TEXT_ROT_CW90 ? Rotation::CW90 : flags & DSN_TEXT_ROT_CCW90 ? Rotation::CCW90 : Rotation::None;
   return st;
 }
 
@@ -237,6 +238,22 @@ int svcAccel(FreeInkHost& self, uint8_t* out, uint32_t cap) {
   return svc(self) ? svc(self)->accel(out) : DSN_ERR_UNAVAILABLE;
 }
 
+int svcFontLoad(FreeInkHost& self, const uint8_t* path, uint32_t pathLen, int size) {
+  Services* s = svc(self);
+  if (!s) return DSN_ERR_UNAVAILABLE;
+  char pbuf[kPathMax + 1];
+  if (!guestPath(path, pathLen, pbuf) || size < 4 || size > 400) return DSN_ERR_INVALID;
+  return s->fontLoad(pbuf, size);  // DSN_FONT_CUSTOM on success
+}
+
+int svcProgress(FreeInkHost& self, const uint8_t* path, uint32_t pathLen) {
+  Services* s = svc(self);
+  if (!s) return DSN_ERR_UNAVAILABLE;
+  char pbuf[kPathMax + 1];
+  if (!guestPath(path, pathLen, pbuf)) return DSN_ERR_INVALID;
+  return s->bookProgress(pbuf);
+}
+
 } // namespace
 
 uint32_t FreeInkHost::nextRandom() {
@@ -277,18 +294,48 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
   device_ = device;
   const int rc = dvm_run(&vm_, budget, onEcall, this);
   target_ = nullptr;
-  state_ = rc == kExit    ? State::Exited
-           : rc == kWait  ? State::Waiting
-           : rc == kBusy  ? State::Busy
-           : rc < 0       ? State::Faulted
-                          : State::Running;
+  state_ = rc == kExit     ? State::Exited
+           : rc == kWait   ? State::Waiting
+           : rc == kBusy   ? State::Busy
+           : rc == kLaunch ? State::Launch
+           : rc < 0        ? State::Faulted
+                           : State::Running;
   return state_;
+}
+
+int FreeInkHost::requestLaunch(int kind, const uint8_t* path, uint32_t pathLen) {
+  launch_ = kind == 1 ? Launch::Reader : kind == 2 ? Launch::Settings : kind == 3 ? Launch::Browser : Launch::None;
+  launchPath_[0] = '\0';
+  if (launch_ == Launch::None) {
+    vm_.x[10] = static_cast<uint32_t>(DSN_ERR_INVALID);
+    return 0;
+  }
+  if (launch_ == Launch::Reader) {
+    if (!path || pathLen == 0 || pathLen >= sizeof launchPath_) {
+      launch_ = Launch::None;
+      vm_.x[10] = static_cast<uint32_t>(DSN_ERR_INVALID);
+      return 0;
+    }
+    memcpy(launchPath_, path, pathLen);
+    launchPath_[pathLen] = '\0';
+  }
+  return kLaunch;
 }
 
 // --- async entry points, called from the generated dispatch. Each either
 // --- completes synchronously (sets x[10], returns 0) or parks (returns kBusy).
 namespace {
 inline uint32_t u(int code) { return static_cast<uint32_t>(code); }
+}
+
+int FreeInkHost::requestLaunchHome(int dest) {
+  if (dest < 0 || dest > 5) {
+    vm_.x[10] = static_cast<uint32_t>(DSN_ERR_INVALID);
+    return 0;
+  }
+  launch_ = Launch::Home;
+  launchHomeDest_ = dest;
+  return kLaunch;
 }
 
 int FreeInkHost::beginNet(const uint8_t* head, uint32_t headLen, const uint8_t* body, uint32_t bodyLen, uint8_t* resp,

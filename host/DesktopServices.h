@@ -26,6 +26,12 @@ class DesktopServices : public Services {
   int fsDelete(const char* path) override;
   int fsAppDir(char* out, uint32_t cap) override;
   int keystore(const char* path, const uint8_t* key, uint32_t n, uint32_t expires) override;
+  // launcher/home
+  int recents(char* out, uint32_t cap) override;
+  int bookProgress(const char* path) override;
+  int fontLoad(const char* path, int size) override;
+  std::string lastFontPath;
+  int lastFontSize = 0;
   // crypto
   int hash(int algo, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) override;
   int aesCbc(int flags, const uint8_t* keyiv, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) override;
@@ -53,6 +59,9 @@ class DesktopServices : public Services {
   int lastBrightness = -1, lastWarm = -1, lastHapticMs = -1, lastHapticIntensity = -1;
   int batteryPercent = 72, batteryPower = 2 /*charging*/;
   int16_t accelXYZ[3] = {0, 0, 1000}; // flat, 1 g on z
+  // Recent-books fixture: records of "path\ttitle\tauthor\tpercent", newline-separated.
+  std::string recentsFixture =
+      "/books/dune.epub\tDune\tFrank Herbert\t37\n/books/hyperion.epub\tHyperion\tDan Simmons\t5\n";
 
  private:
   std::string resolve(const char* path) const;

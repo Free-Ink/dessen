@@ -14,3 +14,11 @@ static inline void dsn_text(int x, int y, const char *s) {
   while (s[len]) len++;
   dsn_text_box(x, y, 0, 0, s, len, DSN_FONT_SMALL, DSN_ALIGN_LEFT, 1, 0);
 }
+
+// Load a custom font from the app's folder; returns DSN_FONT_CUSTOM on success,
+// or a DSN_ERR_*. Pass the result as the font argument to dsn_text_box.
+static inline int dsn_font(const char *path, int size) {
+  int n = 0;
+  while (path[n]) n++;
+  return dsn_font_load(path, n, size);
+}

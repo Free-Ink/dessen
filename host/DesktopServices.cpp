@@ -124,6 +124,26 @@ int DesktopServices::keystore(const char* path, const uint8_t* key, uint32_t n, 
   return fsWrite((std::string(path) + ".key").c_str(), key, n);
 }
 
+int DesktopServices::recents(char* out, uint32_t cap) {
+  return give(reinterpret_cast<const uint8_t*>(recentsFixture.data()), recentsFixture.size(),
+              reinterpret_cast<uint8_t*>(out), cap);
+}
+
+int DesktopServices::fontLoad(const char* path, int size) {
+  lastFontPath = path;
+  lastFontSize = size;
+  return 3;  // DSN_FONT_CUSTOM — desktop has no real rasterizer; text still renders via the trace target
+}
+
+int DesktopServices::bookProgress(const char* path) {
+  // Pull the percent for `path` out of the recents fixture; -1 if not listed.
+  std::string needle = std::string(path) + "\t";
+  const size_t at = recentsFixture.find(needle);
+  if (at == std::string::npos) return -1;
+  const size_t fields = recentsFixture.rfind('\t', recentsFixture.find('\n', at));
+  return fields == std::string::npos ? -1 : atoi(recentsFixture.c_str() + fields + 1);
+}
+
 // ---- crypto ----
 int DesktopServices::hash(int algo, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) {
   const EVP_MD* md = mdFor(algo);

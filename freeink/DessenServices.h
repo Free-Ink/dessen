@@ -35,6 +35,15 @@ class Services {
   // is Unix seconds, 0 = none.
   virtual int keystore(const char*, const uint8_t*, uint32_t, uint32_t) { return -4; }
 
+  // ---- launcher / home ----  for an app set as the device's home screen
+  // Recent books, newline-separated records of "path\ttitle\tauthor\tpercent".
+  virtual int recents(char*, uint32_t) { return -4; }
+  // Saved reading progress for a book: 0-100, or -1 if none.
+  virtual int bookProgress(const char*) { return -1; }
+  // Load a font from the app's folder for this app's custom font slot; returns
+  // DSN_FONT_CUSTOM on success. `size` is the point size (vector fonts).
+  virtual int fontLoad(const char*, int) { return -4; }
+
   // ---- crypto (synchronous) ----  return bytes written, or a DSN_ERR_*
   virtual int hash(int, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int aesCbc(int, const uint8_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }  // keyiv = 32 bytes

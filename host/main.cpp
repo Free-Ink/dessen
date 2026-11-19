@@ -39,6 +39,17 @@ int main(int argc, char** argv) {
     const dessen::State state = host.step(target, screen, input, 1000000);
     input = {};
     if (host.takeRefreshRequest()) puts("refresh");
+    if (state == dessen::State::Launch) {
+      if (host.launch() == dessen::Launch::Home) {
+        printf("[launch home %d]\n", host.launchHomeDest());
+      } else {
+        const char* k = host.launch() == dessen::Launch::Reader     ? "reader"
+                        : host.launch() == dessen::Launch::Settings ? "settings"
+                                                                    : "browser";
+        printf("[launch %s %s]\n", k, host.launchPath());
+      }
+      break;
+    }
     if (state == dessen::State::Exited || state == dessen::State::Faulted) break;
     if (state != dessen::State::Waiting) continue;
     const int c = getchar();

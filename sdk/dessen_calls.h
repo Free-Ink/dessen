@@ -114,3 +114,10 @@ static inline int dsn_backlight_get(void) { return (int)dsn_call0(DSN_SYS_BACKLI
 static inline int dsn_battery(void) { return (int)dsn_call0(DSN_SYS_BATTERY); }
 static inline int dsn_haptic(int ms, int intensity) { return (int)dsn_call1(DSN_SYS_HAPTIC, (long)(((unsigned)ms & 0xffff) | ((unsigned)intensity & 0xff) << 16)); }
 static inline int dsn_accel(void *xyz, int xyz_len) { return (int)dsn_call2(DSN_SYS_ACCEL, (long)xyz, xyz_len); }
+static inline int dsn_open_book(const void *path, int path_len) { return (int)dsn_call2(DSN_SYS_OPEN_BOOK, (long)path, path_len); }
+static inline int dsn_open_settings(void) { return (int)dsn_call0(DSN_SYS_OPEN_SETTINGS); }
+static inline int dsn_open_browser(void) { return (int)dsn_call0(DSN_SYS_OPEN_BROWSER); }
+static inline int dsn_recents(void *list, int list_len) { return (int)dsn_call2(DSN_SYS_RECENTS, (long)list, list_len); }
+static inline int dsn_book_progress(const void *path, int path_len) { return (int)dsn_call2(DSN_SYS_BOOK_PROGRESS, (long)path, path_len); }
+static inline int dsn_open_home(int dest) { return (int)dsn_call1(DSN_SYS_OPEN_HOME, (long)(((unsigned)dest & 0xff))); }
+static inline int dsn_font_load(const void *path, int path_len, int size) { return (int)dsn_call3(DSN_SYS_FONT_LOAD, (long)path, path_len, (long)(((unsigned)size & 0xffff))); }

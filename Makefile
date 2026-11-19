@@ -5,8 +5,8 @@ RISCV ?= $(HOME)/.platformio/tools/toolchain-riscv32-esp/bin/riscv32-esp-elf-
 # will fail to link. Add a small runtime to sdk/ when an app first needs one.
 APPFLAGS = -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -mno-relax \
            -fno-tree-loop-distribute-patterns -Wall -Isdk -T sdk/app.ld -Wl,--no-warn-rwx-segments
-APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest
-SD_APPS = hello lightsout dice sudoku
+APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal
+SD_APPS = hello lightsout dice sudoku home minimal
 
 # FreeInk SDK checkout, used read-only for its UI headers.
 FREEINK_SDK ?= ../freeink-sdk
@@ -43,9 +43,9 @@ build/dessen: host/main.cpp build/dessen_vm.o $(BINDING)
 build/test_freeink: freeink/test_host.cpp build/dessen_vm.o $(BINDING)
 	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
 
-build/%.bin: apps/%.c sdk/crt0.S sdk/app.ld sdk/dessen.h sdk/dessen_abi.h $(GEN)
+build/%.bin: apps/%.c sdk/crt0.S sdk/rt.c sdk/app.ld sdk/dessen.h sdk/dessen_abi.h $(GEN)
 	@mkdir -p build
-	$(RISCV)gcc $(APPFLAGS) sdk/crt0.S $< -o build/$*.elf
+	$(RISCV)gcc $(APPFLAGS) sdk/crt0.S sdk/rt.c $< -o build/$*.elf
 	$(RISCV)objcopy -O binary build/$*.elf $@
 
 # Exit codes: selftest 0 = all checks pass; hello returns the event it got
@@ -58,6 +58,7 @@ test: all
 	printf ncb | build/dessen build/lightsout.bin | grep -q 'Moves 1'
 	printf cb | build/dessen build/dice.bin | grep -q 'Last:  d20='
 	printf b | build/dessen build/sudoku.bin | grep -q 'cells left'
+	printf c | build/dessen build/home.bin | grep -q 'launch reader /books/dune.epub'
 	@tmp=$$(mktemp -d); DESSEN_FS_ROOT=$$tmp build/dessen build/captest.bin; rc=$$?; rm -rf $$tmp; test $$rc -eq 0 && echo 'captest: PASS'
 	@nr=$$(mktemp -d); fs=$$(mktemp -d); mkdir -p $$nr/example.test; \
 	  printf 'hello world' > $$nr/example.test/hello; \

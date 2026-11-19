@@ -13,9 +13,14 @@ enum class State : uint8_t {
   Running, // call step() again
   Waiting, // blocked until the next input event
   Busy,    // an async call is in flight; call step() again to poll it
+  Launch,  // the app asked the host to open a firmware screen and exit
   Exited,
   Faulted,
 };
+
+// What a launcher/home app asked the host to open (see State::Launch). The host
+// opens the screen and tears the app down; the app does not resume.
+enum class Launch : uint8_t { None, Reader, Settings, Browser, Home };
 
 class Services;
 
@@ -52,7 +57,15 @@ class FreeInkHost {
   int beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* dest, uint32_t destLen);
   int beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, int flags);
   int beginKeygen(uint32_t bits, uint8_t* pub, uint32_t pubCap, uint8_t* priv, uint32_t privCap);
+  int requestLaunch(int kind, const uint8_t* path, uint32_t pathLen); // open_book/settings/browser
+  int requestLaunchHome(int dest);                                   // open_home
   Services* services() const { return services_; }
+
+  // After step() returns State::Launch, what the app asked to open and (for the
+  // reader) the book path. The host acts on these, then discards the app.
+  Launch launch() const { return launch_; }
+  const char* launchPath() const { return launchPath_; }
+  int launchHomeDest() const { return launchHomeDest_; } // DSN_HOME_* for Launch::Home
 
   // True once after the app asked for the panel to be updated.
   bool takeRefreshRequest() {
@@ -77,6 +90,9 @@ class FreeInkHost {
   uint32_t (*random_)() = nullptr;
   uint32_t fallbackSeed_ = 0x9e3779b9u;
   Services* services_ = nullptr;
+  Launch launch_ = Launch::None;
+  char launchPath_[256] = {0};
+  int launchHomeDest_ = 0;
   freeink::ui::DrawTarget* target_ = nullptr;
   freeink::ui::DeviceContext device_{};
 

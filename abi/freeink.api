@@ -78,3 +78,13 @@
 82 battery() -> i32                            : result = self.services() ? self.services()->battery() : DSN_ERR_UNAVAILABLE;
 83 haptic(u16 ms, u8 intensity) -> i32         : result = self.services() ? self.services()->haptic((int)ms, (int)intensity) : DSN_ERR_UNAVAILABLE;
 84 accel(out xyz) -> i32                       : result = svcAccel(self, xyz, xyz_len);
+
+# --- launcher / home (96-103). The open_* calls hand off to a firmware screen
+# --- and end the app (State::Launch), so a home app uses them like dsn_exit. ---
+96 open_book(buf path) -> i32      : return self.requestLaunch(1, path, path_len);
+97 open_settings() -> i32          : return self.requestLaunch(2, 0, 0);
+98 open_browser() -> i32           : return self.requestLaunch(3, 0, 0);
+99 recents(out list) -> i32        : result = self.services() ? self.services()->recents(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
+100 book_progress(buf path) -> i32 : result = svcProgress(self, path, path_len);
+101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
+102 font_load(buf path, u16 size) -> i32 : result = svcFontLoad(self, path, path_len, (int)size);

@@ -520,3 +520,64 @@ case 84: { // accel
   a[0] = result;
   break;
 }
+case 96: { // open_book
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  return self.requestLaunch(1, path, path_len);
+  a[0] = result;
+  break;
+}
+case 97: { // open_settings
+  uint32_t result = 0;
+  return self.requestLaunch(2, 0, 0);
+  a[0] = result;
+  break;
+}
+case 98: { // open_browser
+  uint32_t result = 0;
+  return self.requestLaunch(3, 0, 0);
+  a[0] = result;
+  break;
+}
+case 99: { // recents
+  const uint32_t list_len = a[1];
+  uint8_t* list = static_cast<uint8_t*>(dvm_ptr(vm, a[0], list_len));
+  (void)list_len;
+  const uint32_t list_addr = a[0]; (void)list_addr;
+  if (!list) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = self.services() ? self.services()->recents(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
+case 100: { // book_progress
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcProgress(self, path, path_len);
+  a[0] = result;
+  break;
+}
+case 101: { // open_home
+  const uint32_t dest = static_cast<uint8_t>(a[0] >> 0); (void)dest;
+  uint32_t result = 0;
+  return self.requestLaunchHome((int)dest);
+  a[0] = result;
+  break;
+}
+case 102: { // font_load
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t size = static_cast<uint16_t>(a[2] >> 0); (void)size;
+  uint32_t result = 0;
+  result = svcFontLoad(self, path, path_len, (int)size);
+  a[0] = result;
+  break;
+}
