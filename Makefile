@@ -5,15 +5,26 @@ RISCV ?= $(HOME)/.platformio/tools/toolchain-riscv32-esp/bin/riscv32-esp-elf-
 # will fail to link. Add a small runtime to sdk/ when an app first needs one.
 APPFLAGS = -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -mno-relax \
            -fno-tree-loop-distribute-patterns -Wall -Isdk -T sdk/app.ld -Wl,--no-warn-rwx-segments
-APPS = hello selftest oob bench drawtest lightsout dice sudoku
+APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest
 SD_APPS = hello lightsout dice sudoku
 
 # FreeInk SDK checkout, used read-only for its UI headers.
 FREEINK_SDK ?= ../freeink-sdk
 
+# OpenSSL (libcrypto) backs the DESKTOP crypto service only — it is a test tool,
+# not firmware. Found via Homebrew or pkg-config.
+OPENSSL_PREFIX ?= $(shell brew --prefix openssl@3 2>/dev/null)
+ifneq ($(OPENSSL_PREFIX),)
+  OPENSSL_CFLAGS := -I$(OPENSSL_PREFIX)/include
+  OPENSSL_LIBS := -L$(OPENSSL_PREFIX)/lib -lcrypto
+else
+  OPENSSL_CFLAGS := $(shell pkg-config --cflags libcrypto 2>/dev/null)
+  OPENSSL_LIBS := $(shell pkg-config --libs libcrypto 2>/dev/null || echo -lcrypto)
+endif
+
 GEN = sdk/dessen_sysnums.h sdk/dessen_calls.h freeink/dessen_dispatch.inc
-HOSTFLAGS = -std=c++17 -O2 -Wall -Wextra -Ivm -Isdk -Ifreeink -Ihost -I$(FREEINK_SDK)/libs/ui/FreeInkUI/include
-BINDING = sdk/dessen_abi.h freeink/DessenFreeInk.cpp freeink/DessenFreeInk.h host/TraceTarget.h vm/dessen_vm.h $(GEN)
+HOSTFLAGS = -std=c++17 -O2 -Wall -Wextra -Ivm -Isdk -Ifreeink -Ihost $(OPENSSL_CFLAGS) -I$(FREEINK_SDK)/libs/ui/FreeInkUI/include
+BINDING = sdk/dessen_abi.h freeink/DessenFreeInk.cpp freeink/DessenFreeInk.h freeink/DessenServices.h host/DesktopServices.cpp host/DesktopServices.h host/TraceTarget.h vm/dessen_vm.h $(GEN)
 
 all: build/dessen build/test_freeink $(APPS:%=build/%.bin)
 
@@ -27,10 +38,10 @@ build/dessen_vm.o: vm/dessen_vm.c vm/dessen_vm.h sdk/dessen_abi.h $(GEN)
 	cc -O2 -Wall -Wextra -Ivm -Isdk -c vm/dessen_vm.c -o $@
 
 build/dessen: host/main.cpp build/dessen_vm.o $(BINDING)
-	c++ $(HOSTFLAGS) host/main.cpp freeink/DessenFreeInk.cpp build/dessen_vm.o -o $@
+	c++ $(HOSTFLAGS) host/main.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
 
 build/test_freeink: freeink/test_host.cpp build/dessen_vm.o $(BINDING)
-	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp build/dessen_vm.o -o $@
+	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
 
 build/%.bin: apps/%.c sdk/crt0.S sdk/app.ld sdk/dessen.h sdk/dessen_abi.h $(GEN)
 	@mkdir -p build
@@ -47,7 +58,14 @@ test: all
 	printf ncb | build/dessen build/lightsout.bin | grep -q 'Moves 1'
 	printf cb | build/dessen build/dice.bin | grep -q 'Last:  d20='
 	printf b | build/dessen build/sudoku.bin | grep -q 'cells left'
-	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin
+	@tmp=$$(mktemp -d); DESSEN_FS_ROOT=$$tmp build/dessen build/captest.bin; rc=$$?; rm -rf $$tmp; test $$rc -eq 0 && echo 'captest: PASS'
+	@nr=$$(mktemp -d); fs=$$(mktemp -d); mkdir -p $$nr/example.test; \
+	  printf 'hello world' > $$nr/example.test/hello; \
+	  printf 'nope' > $$nr/example.test/missing; printf '404' > $$nr/example.test/missing.status; \
+	  printf 'the book bytes here' > $$nr/example.test/book.bin; \
+	  DESSEN_NET_ROOT=$$nr DESSEN_FS_ROOT=$$fs build/dessen build/nettest.bin; rc=$$?; \
+	  rm -rf $$nr $$fs; test $$rc -eq 0 && echo 'nettest: PASS'
+	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin
 	@echo PASS
 
 # Plugin folders ready to copy into /plugins on the SD card.

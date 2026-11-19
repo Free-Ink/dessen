@@ -1,14 +1,19 @@
 #include "DessenFreeInk.h"
 
+#include <cstdio>
+#include <cstring>
+
 #include "../sdk/dessen_abi.h"
+#include "DessenServices.h"
 
 namespace dessen {
 namespace {
 
 using namespace freeink::ui;
 
-enum { kExit = 1, kWait, kYield }; // positive stop codes for dvm_run
+enum { kExit = 1, kWait, kYield, kBusy }; // positive stop codes for dvm_run
 constexpr uint32_t kStrMax = 200;  // longest text an app can pass in one call
+constexpr uint32_t kPathMax = 255; // longest storage path
 
 // The app's view of the screen: the safe area's size, and where its top-left
 // corner sits on the panel.
@@ -137,6 +142,101 @@ uint32_t drawBitmap(DrawTarget& target, View screen, int32_t x, int32_t y, int32
   return 0;
 }
 
+// ---- Capability sanitizers. Every app value reaches a Services method only
+// ---- through one of these. Each rejects bad input rather than trusting it. ----
+
+Services* svc(FreeInkHost& self) { return self.services(); }
+
+// Copy a guest path (raw bytes) into `buf` with the storage path rules: it must
+// start with '/', hold no empty / "." / ".." component and no control bytes,
+// and fit kPathMax. Returns false (and leaves buf untouched) on any violation.
+bool guestPath(const uint8_t* p, uint32_t len, char* buf) {
+  if (!p || len == 0 || len > kPathMax || p[0] != '/') return false;
+  for (uint32_t i = 0; i < len; i++)
+    if (p[i] < 0x20 || p[i] == 0x7f) return false;
+  // No "." or ".." path component (between slashes or at the ends).
+  uint32_t start = 1;
+  for (uint32_t i = 1; i <= len; i++) {
+    if (i == len || p[i] == '/') {
+      const uint32_t n = i - start;
+      if (n == 0 && i != len) return false;                       // empty component (// )
+      if (n == 1 && p[start] == '.') return false;                // .
+      if (n == 2 && p[start] == '.' && p[start + 1] == '.') return false; // ..
+      start = i + 1;
+    }
+  }
+  memcpy(buf, p, len);
+  buf[len] = '\0';
+  return true;
+}
+
+int svcDeviceId(FreeInkHost& self, uint8_t* out, uint32_t cap) {
+  return svc(self) ? svc(self)->deviceId(reinterpret_cast<char*>(out), cap) : DSN_ERR_UNAVAILABLE;
+}
+
+// One entry for every storage op; `mode` picks it. `out`/`outLen` is the app's
+// output buffer (read buffer for 'w'/'k'); `expires` only used by 'k'.
+int svcFs(FreeInkHost& self, char mode, const uint8_t* path, uint32_t pathLen, uint8_t* out, uint32_t outLen,
+          uint32_t, uint32_t expires) {
+  Services* s = svc(self);
+  if (!s) return DSN_ERR_UNAVAILABLE;
+  char pbuf[kPathMax + 1];
+  if (mode != 'a' && !guestPath(path, pathLen, pbuf)) return DSN_ERR_INVALID;
+  switch (mode) {
+    case 'r': return s->fsRead(pbuf, out, outLen);
+    case 'w': return s->fsWrite(pbuf, out, outLen);
+    case 'l': return s->fsList(pbuf, reinterpret_cast<char*>(out), outLen);
+    case 'd': return s->fsDelete(pbuf);
+    case 'a': return s->fsAppDir(reinterpret_cast<char*>(out), outLen);
+    case 'k': return s->keystore(pbuf, out, outLen, expires);
+    default: return DSN_ERR_INVALID;
+  }
+}
+
+int svcHash(FreeInkHost& self, int algo, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) {
+  if (algo != DSN_HASH_SHA1 && algo != DSN_HASH_SHA256) return DSN_ERR_INVALID;
+  return svc(self) ? svc(self)->hash(algo, data, n, out, cap) : DSN_ERR_UNAVAILABLE;
+}
+
+int svcAes(FreeInkHost& self, int flags, const uint8_t* keyiv, uint32_t kl, const uint8_t* data, uint32_t n,
+           uint8_t* out, uint32_t cap) {
+  if (kl != 32) return DSN_ERR_INVALID;  // key16 || iv16
+  // CBC input must be block-aligned except when padding is added on encrypt.
+  const bool blockAligned = (n & 15) == 0;
+  const bool padEncrypt = (flags & DSN_AES_ENCRYPT) && !(flags & DSN_AES_NOPAD);
+  if (!blockAligned && !padEncrypt) return DSN_ERR_INVALID;
+  return svc(self) ? svc(self)->aesCbc(flags, keyiv, data, n, out, cap) : DSN_ERR_UNAVAILABLE;
+}
+
+// RSA encrypt/decrypt/sign share one entry; `op` picks it.
+int svcRsa(FreeInkHost& self, char op, int flags, const uint8_t* key, uint32_t kl, const uint8_t* data, uint32_t n,
+           uint8_t* out, uint32_t cap) {
+  Services* s = svc(self);
+  if (!s) return DSN_ERR_UNAVAILABLE;
+  switch (op) {
+    case 'e': return s->rsaEncrypt(key, kl, data, n, out, cap);
+    case 'd': return s->rsaDecrypt(flags, key, kl, data, n, out, cap);
+    case 's': return s->rsaSign(flags, key, kl, data, n, out, cap);
+    default: return DSN_ERR_INVALID;
+  }
+}
+
+int svcPkcs12(FreeInkHost& self, const uint8_t* p12, uint32_t n, const char* pass, uint8_t* out, uint32_t cap) {
+  if (!pass) return DSN_ERR_INVALID;
+  return svc(self) ? svc(self)->pkcs12Parse(p12, n, pass, out, cap) : DSN_ERR_UNAVAILABLE;
+}
+
+int svcSecure(FreeInkHost& self, int wrap, const uint8_t* in, uint32_t n, uint8_t* out, uint32_t cap) {
+  Services* s = svc(self);
+  if (!s) return DSN_ERR_UNAVAILABLE;
+  return wrap ? s->secureWrap(in, n, out, cap) : s->secureUnwrap(in, n, out, cap);
+}
+
+int svcAccel(FreeInkHost& self, uint8_t* out, uint32_t cap) {
+  if (cap < 6) return DSN_ERR_TOO_BIG;
+  return svc(self) ? svc(self)->accel(out) : DSN_ERR_UNAVAILABLE;
+}
+
 } // namespace
 
 uint32_t FreeInkHost::nextRandom() {
@@ -152,9 +252,23 @@ bool FreeInkHost::load(uint8_t* mem, uint32_t len, uint32_t memCap) {
   return state_ == State::Running;
 }
 
+void FreeInkHost::randomBytesInto(uint8_t* out, uint32_t n) {
+  if (services_ && services_->randomBytes(out, n)) return;
+  for (uint32_t i = 0; i < n; i++) out[i] = static_cast<uint8_t>(nextRandom());
+}
+
+void FreeInkHost::finishAsync(int code) {
+  vm_.x[10] = static_cast<uint32_t>(code);
+  asyncPending_ = false;
+}
+
 State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const InputSnapshot& input, uint32_t budget) {
   if (state_ == State::Exited || state_ == State::Faulted) return state_;
-  if (state_ == State::Waiting) {
+  if (state_ == State::Busy) {
+    const int code = services_ ? services_->poll() : DSN_ERR_IO;
+    if (code == kPending) return state_; // still working; try again next tick
+    finishAsync(code);                   // result ready: resume the VM below
+  } else if (state_ == State::Waiting) {
     const uint32_t ev = eventOf(input, viewOf(device));
     if (!ev) return state_;
     vm_.x[10] = ev; // wait_event's return value
@@ -163,8 +277,61 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
   device_ = device;
   const int rc = dvm_run(&vm_, budget, onEcall, this);
   target_ = nullptr;
-  state_ = rc == kExit ? State::Exited : rc == kWait ? State::Waiting : rc < 0 ? State::Faulted : State::Running;
+  state_ = rc == kExit    ? State::Exited
+           : rc == kWait  ? State::Waiting
+           : rc == kBusy  ? State::Busy
+           : rc < 0       ? State::Faulted
+                          : State::Running;
   return state_;
+}
+
+// --- async entry points, called from the generated dispatch. Each either
+// --- completes synchronously (sets x[10], returns 0) or parks (returns kBusy).
+namespace {
+inline uint32_t u(int code) { return static_cast<uint32_t>(code); }
+}
+
+int FreeInkHost::beginNet(const uint8_t* head, uint32_t headLen, const uint8_t* body, uint32_t bodyLen, uint8_t* resp,
+                          uint32_t respCap) {
+  if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
+  char hbuf[1025];
+  if (headLen > sizeof hbuf - 1) { vm_.x[10] = u(DSN_ERR_INVALID); return 0; }
+  memcpy(hbuf, head, headLen);
+  hbuf[headLen] = '\0';
+  const int code = services_->netStart(hbuf, body, bodyLen, resp, respCap);
+  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  vm_.x[10] = u(code);
+  return 0;
+}
+
+int FreeInkHost::beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* dest, uint32_t destLen) {
+  if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
+  char ubuf[1025], dbuf[kPathMax + 1];
+  if (urlLen > sizeof ubuf - 1) { vm_.x[10] = u(DSN_ERR_INVALID); return 0; }
+  if (!guestPath(dest, destLen, dbuf)) { vm_.x[10] = u(DSN_ERR_INVALID); return 0; }
+  memcpy(ubuf, url, urlLen);
+  ubuf[urlLen] = '\0';
+  const int code = services_->fetchStart(ubuf, dbuf);
+  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  vm_.x[10] = u(code);
+  return 0;
+}
+
+int FreeInkHost::beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, int flags) {
+  if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
+  const int code = services_->textInputStart(prompt, flags, reinterpret_cast<char*>(out), cap);
+  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  vm_.x[10] = u(code);
+  return 0;
+}
+
+int FreeInkHost::beginKeygen(uint32_t bits, uint8_t* pub, uint32_t pubCap, uint8_t* priv, uint32_t privCap) {
+  if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
+  if (bits != 1024 && bits != 2048) { vm_.x[10] = u(DSN_ERR_INVALID); return 0; }
+  const int code = services_->keygenStart(bits, pub, pubCap, priv, privCap);
+  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  vm_.x[10] = u(code);
+  return 0;
 }
 
 int FreeInkHost::onEcall(dvm_t* vm, void* selfPtr) {

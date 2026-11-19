@@ -12,9 +12,12 @@ namespace dessen {
 enum class State : uint8_t {
   Running, // call step() again
   Waiting, // blocked until the next input event
+  Busy,    // an async call is in flight; call step() again to poll it
   Exited,
   Faulted,
 };
+
+class Services;
 
 class FreeInkHost {
  public:
@@ -36,6 +39,21 @@ class FreeInkHost {
   // app gets a weak fallback sequence, fine for tests and nothing else.
   void setRandom(uint32_t (*source)()) { random_ = source; }
 
+  // Install the capability services (storage, crypto, net, clock, board, text
+  // input). Without them every capability call returns DSN_ERR_UNAVAILABLE.
+  // The caller owns the pointer and must outlive the host.
+  void setServices(Services* services) { services_ = services; }
+
+  // Async helpers, called from the generated dispatch. Each prepares the call,
+  // then either completes synchronously (sets x[10], returns 0 to keep running)
+  // or parks the app (returns kBusy). Not for direct use.
+  int beginNet(const uint8_t* head, uint32_t headLen, const uint8_t* body, uint32_t bodyLen, uint8_t* resp,
+               uint32_t respCap);
+  int beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* dest, uint32_t destLen);
+  int beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, int flags);
+  int beginKeygen(uint32_t bits, uint8_t* pub, uint32_t pubCap, uint8_t* priv, uint32_t privCap);
+  Services* services() const { return services_; }
+
   // True once after the app asked for the panel to be updated.
   bool takeRefreshRequest() {
     const bool r = refresh_;
@@ -50,13 +68,20 @@ class FreeInkHost {
   static int onEcall(dvm_t* vm, void* self);
   uint32_t nextRandom();
 
+  void finishAsync(int code); // write a completed async result into x[10]
+
   dvm_t vm_{};
   State state_ = State::Exited;
   bool refresh_ = false;
+  bool asyncPending_ = false; // an async op is parked, poll it each tick
   uint32_t (*random_)() = nullptr;
   uint32_t fallbackSeed_ = 0x9e3779b9u;
+  Services* services_ = nullptr;
   freeink::ui::DrawTarget* target_ = nullptr;
   freeink::ui::DeviceContext device_{};
+
+ public:
+  void randomBytesInto(uint8_t* out, uint32_t n); // fills from service or fallback
 };
 
 } // namespace dessen

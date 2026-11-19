@@ -109,10 +109,13 @@ def dispatch(calls):
                     out += (f"  char {arg}_buf[kStrMax + 1];\n"
                             f"  const char* {arg} = guestStr(vm, a[{i}], a[{i + 1}], {arg}_buf);\n")
                 else:
-                    const = "" if any(t == "out" and a == arg for t, a in c["params"]) else "const "
+                    is_out = any(t == "out" and a == arg for t, a in c["params"])
+                    const = "" if is_out else "const "
                     out += (f"  const uint32_t {arg}_len = a[{i + 1}];\n"
                             f"  {const}uint8_t* {arg} = static_cast<{const}uint8_t*>(dvm_ptr(vm, a[{i}], {arg}_len));\n"
                             f"  (void){arg}_len;\n")
+                    if is_out:
+                        out += f"  const uint32_t {arg}_addr = a[{i}]; (void){arg}_addr;\n"
                 out += f"  if (!{arg}) {{ a[0] = static_cast<uint32_t>(-1); break; }}\n"
             elif typ == "len":
                 continue

@@ -103,7 +103,10 @@ app.c ──(RISC-V GCC)──▶ app.bin ──┐
 - Apps carry their own logic; the firmware provides the device. The app API is a
   projection of the SDK, not a reimplementation.
 
-Flash cost on an ESP32-C3 (`-Os`): ~1.3 KB interpreter + ~2.8 KB binding. Zero
+Flash cost on an ESP32-C3 (`-Os`): ~1.3 KB interpreter + ~5.7 KB binding ≈ **7 KB**
+(the binding at ~2.8 KB for drawing alone, the rest for the full capability set —
+storage, crypto, network, board sensors, text input). The crypto/network/storage
+*work* is not in that number: it reuses firmware code that is already there. Zero
 when the firmware build doesn't enable it.
 
 ## Alternatives we evaluated
@@ -116,7 +119,7 @@ ESP32-C3 at `-Os` and measured directly (see Method), not quoted.
 
 | Approach | App is | Engine flash | Authoring | Why not |
 |---|---|---:|---|---|
-| **dessen** (this repo) | compiled RV32IM `.bin` | **~1.3 KB** + ~2.8 KB binding | needs a compiler (a tool can hide it) | — chosen |
+| **dessen** (this repo) | compiled RV32IM `.bin` | **~7 KB** (1.3 KB VM + 5.7 KB binding) | needs a compiler (a tool can hide it) | — chosen |
 | Lua 5.4 | `.lua` text file | ~119 KB¹ (141 KB full) | edit on the SD card, no toolchain | 30× the flash; GC on a 380 KB heap |
 | MicroQuickJS | `.js` text file | ~109 KB² | edit on the SD card; same language as plugin.js | 27× the flash; heavier RAM |
 | QuickJS (full) | `.js` text file | ~377 KB | full modern JS | won't fit the headroom |
@@ -127,9 +130,9 @@ ESP32-C3 at `-Os` and measured directly (see Method), not quoted.
 | Emulate an ESP32 in the ESP32 | an unmodified firmware `.bin` | n/a | — | infeasible: RAM, closed radio blobs, ~20–50× slowdown |
 | Extend `device.json` (declarative) | a JSON manifest | ~0 | edit on the SD card | can't compute anything (no games, tools, logic) |
 
-Every scripting-engine row would **also** need the same ~2.8 KB FreeInk binding
-on top, plus its own interpreter heap in RAM; the compiled-bin approach needs
-neither. The one thing the scripting engines win is authoring — editing a text
+Every scripting-engine row would **also** need the same ~5.7 KB capability
+binding on top, plus its own interpreter heap in RAM; the compiled-bin approach
+needs only the binding. The one thing the scripting engines win is authoring — editing a text
 file straight on the card, no compiler — which is what a host-side
 [authoring tool](docs/writing-apps.md) is meant to close for dessen.
 

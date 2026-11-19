@@ -88,3 +88,29 @@ static inline int dsn_text_box(int x, int y, int w, int h, const char *s, int s_
 static inline unsigned dsn_measure_text(const char *s, int s_len, int font, int flags) { return (unsigned)dsn_call3(DSN_SYS_MEASURE_TEXT, (long)s, s_len, (long)(((unsigned)font & 0xff) | ((unsigned)flags & 0xff) << 8)); }
 static inline int dsn_line_height(int font) { return (int)dsn_call1(DSN_SYS_LINE_HEIGHT, (long)(((unsigned)font & 0xff))); }
 static inline int dsn_bitmap(int x, int y, int w, int h, const void *data, int data_len, int bw, int bh, int format, int mode, int color, int rotation) { return (int)dsn_call6(DSN_SYS_BITMAP, (long)(((unsigned)x & 0xffff) | ((unsigned)y & 0xffff) << 16), (long)(((unsigned)w & 0xffff) | ((unsigned)h & 0xffff) << 16), (long)data, data_len, (long)(((unsigned)bw & 0xffff) | ((unsigned)bh & 0xffff) << 16), (long)(((unsigned)format & 0xff) | ((unsigned)mode & 0xff) << 8 | ((unsigned)color & 0xff) << 16 | ((unsigned)rotation & 0xff) << 24)); }
+static inline unsigned dsn_time(void) { return (unsigned)dsn_call0(DSN_SYS_TIME); }
+static inline int dsn_device_id(void *id, int id_len) { return (int)dsn_call2(DSN_SYS_DEVICE_ID, (long)id, id_len); }
+static inline int dsn_random_bytes(void *buf, int buf_len) { return (int)dsn_call2(DSN_SYS_RANDOM_BYTES, (long)buf, buf_len); }
+static inline int dsn_text_input(const char *prompt, int prompt_len, void *text, int text_len, int flags) { return (int)dsn_call5(DSN_SYS_TEXT_INPUT, (long)prompt, prompt_len, (long)text, text_len, (long)(((unsigned)flags & 0xff))); }
+static inline int dsn_fs_list(const void *path, int path_len, void *entries, int entries_len) { return (int)dsn_call4(DSN_SYS_FS_LIST, (long)path, path_len, (long)entries, entries_len); }
+static inline int dsn_fs_read(const void *path, int path_len, void *data, int data_len) { return (int)dsn_call4(DSN_SYS_FS_READ, (long)path, path_len, (long)data, data_len); }
+static inline int dsn_fs_write(const void *path, int path_len, const void *data, int data_len) { return (int)dsn_call4(DSN_SYS_FS_WRITE, (long)path, path_len, (long)data, data_len); }
+static inline int dsn_fs_delete(const void *path, int path_len) { return (int)dsn_call2(DSN_SYS_FS_DELETE, (long)path, path_len); }
+static inline int dsn_fs_app_dir(void *path, int path_len) { return (int)dsn_call2(DSN_SYS_FS_APP_DIR, (long)path, path_len); }
+static inline int dsn_keystore(const void *path, int path_len, const void *key, int key_len, unsigned expires) { return (int)dsn_call5(DSN_SYS_KEYSTORE, (long)path, path_len, (long)key, key_len, (long)expires); }
+static inline int dsn_net_request(const void *head, int head_len, const void *body, int body_len, void *resp, int resp_len) { return (int)dsn_call6(DSN_SYS_NET_REQUEST, (long)head, head_len, (long)body, body_len, (long)resp, resp_len); }
+static inline int dsn_fetch_to_sd(const void *url, int url_len, const void *dest, int dest_len) { return (int)dsn_call4(DSN_SYS_FETCH_TO_SD, (long)url, url_len, (long)dest, dest_len); }
+static inline int dsn_hash(int algo, const void *data, int data_len, void *digest, int digest_len) { return (int)dsn_call5(DSN_SYS_HASH, (long)(((unsigned)algo & 0xff)), (long)data, data_len, (long)digest, digest_len); }
+static inline int dsn_aes_cbc(int flags, const void *keyiv, int keyiv_len, const void *data, int data_len, void *dst, int dst_len) { return (int)dsn_call7(DSN_SYS_AES_CBC, (long)(((unsigned)flags & 0xff)), (long)keyiv, keyiv_len, (long)data, data_len, (long)dst, dst_len); }
+static inline int dsn_rsa_keygen(int bits, void *pub, int pub_len, void *priv, int priv_len) { return (int)dsn_call5(DSN_SYS_RSA_KEYGEN, (long)(((unsigned)bits & 0xffff)), (long)pub, pub_len, (long)priv, priv_len); }
+static inline int dsn_rsa_encrypt(const void *cert, int cert_len, const void *data, int data_len, void *ct, int ct_len) { return (int)dsn_call6(DSN_SYS_RSA_ENCRYPT, (long)cert, cert_len, (long)data, data_len, (long)ct, ct_len); }
+static inline int dsn_rsa_decrypt(int flags, const void *priv, int priv_len, const void *data, int data_len, void *pt, int pt_len) { return (int)dsn_call7(DSN_SYS_RSA_DECRYPT, (long)(((unsigned)flags & 0xff)), (long)priv, priv_len, (long)data, data_len, (long)pt, pt_len); }
+static inline int dsn_rsa_sign(int algo, const void *priv, int priv_len, const void *digest, int digest_len, void *sig, int sig_len) { return (int)dsn_call7(DSN_SYS_RSA_SIGN, (long)(((unsigned)algo & 0xff)), (long)priv, priv_len, (long)digest, digest_len, (long)sig, sig_len); }
+static inline int dsn_pkcs12_parse(const void *p12, int p12_len, const char *pass, int pass_len, void *blob, int blob_len) { return (int)dsn_call6(DSN_SYS_PKCS12_PARSE, (long)p12, p12_len, (long)pass, pass_len, (long)blob, blob_len); }
+static inline int dsn_secure_wrap(const void *data, int data_len, void *blob, int blob_len) { return (int)dsn_call4(DSN_SYS_SECURE_WRAP, (long)data, data_len, (long)blob, blob_len); }
+static inline int dsn_secure_unwrap(const void *blob, int blob_len, void *data, int data_len) { return (int)dsn_call4(DSN_SYS_SECURE_UNWRAP, (long)blob, blob_len, (long)data, data_len); }
+static inline int dsn_backlight(int brightness, int warm) { return (int)dsn_call1(DSN_SYS_BACKLIGHT, (long)(((unsigned)brightness & 0xffff) | ((unsigned)warm & 0xffff) << 16)); }
+static inline int dsn_backlight_get(void) { return (int)dsn_call0(DSN_SYS_BACKLIGHT_GET); }
+static inline int dsn_battery(void) { return (int)dsn_call0(DSN_SYS_BATTERY); }
+static inline int dsn_haptic(int ms, int intensity) { return (int)dsn_call1(DSN_SYS_HAPTIC, (long)(((unsigned)ms & 0xffff) | ((unsigned)intensity & 0xff) << 16)); }
+static inline int dsn_accel(void *xyz, int xyz_len) { return (int)dsn_call2(DSN_SYS_ACCEL, (long)xyz, xyz_len); }

@@ -64,3 +64,38 @@ typedef struct {
 #define DSN_EV_TYPE(e) ((e) & 0xff)
 #define DSN_EV_X(e) (((e) >> 8) & 0xfff)
 #define DSN_EV_Y(e) (((e) >> 20) & 0xfff)
+
+// ---- Capability ABI (see docs/proposed-capabilities.md) ----
+
+// Error returns (negative), shared by all capability calls.
+#define DSN_ERR_INVALID     (-1)  // bad argument (failed a range check)
+#define DSN_ERR_IO          (-2)  // storage or transport failure
+#define DSN_ERR_TOO_BIG     (-3)  // did not fit the app's buffer (nothing written)
+#define DSN_ERR_UNAVAILABLE (-4)  // host has no such service / board lacks the part
+#define DSN_ERR_DENIED      (-5)  // refused by host policy
+
+// hash() / rsa_sign() algorithm
+#define DSN_HASH_SHA1   1
+#define DSN_HASH_SHA256 2
+
+// aes_cbc() flags
+#define DSN_AES_DECRYPT 0  // default direction bit
+#define DSN_AES_ENCRYPT 1
+#define DSN_AES_NOPAD   2  // OR in: skip PKCS#7 — caller pads/unpads itself
+
+// rsa_decrypt() flags
+#define DSN_RSA_PKCS1 0  // strip PKCS#1 v1.5 type-2 padding (default)
+#define DSN_RSA_RAW   1  // return the raw modulus-sized block, caller unpads
+
+// rsa_sign() flags (OR into the algo byte)
+#define DSN_SIGN_NODIGESTINFO 0x80  // sign the bare digest, no DigestInfo prefix
+
+// text_input() flags
+#define DSN_INPUT_PASSWORD 1
+
+// battery() power state (second byte of the result)
+#define DSN_PWR_UNKNOWN  0
+#define DSN_PWR_BATTERY  1
+#define DSN_PWR_CHARGING 2
+#define DSN_PWR_EXTERNAL 3
+#define DSN_PWR_FULL     4

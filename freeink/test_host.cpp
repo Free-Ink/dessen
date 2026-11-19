@@ -1,17 +1,119 @@
 // Host check for the FreeInk binding: runs real app binaries against a
-// recording DrawTarget. Usage: test_host hello.bin oob.bin lightsout.bin dice.bin sudoku.bin drawtest.bin
+// recording DrawTarget. Usage: test_host hello oob lightsout dice sudoku drawtest asynctest (.bin)
 #include <cassert>
 #include <cstdio>
 #include <string>
 #include <vector>
 
+#include <openssl/evp.h>
+#include <openssl/pkcs12.h>
+#include <openssl/x509.h>
+
+#include "../host/DesktopServices.h"
 #include "../host/TraceTarget.h"
 #include "../sdk/dessen_abi.h"
 #include "DessenFreeInk.h"
+#include "DessenServices.h"
 
 using namespace freeink::ui;
 
 static uint8_t mem[64 * 1024];
+static uint8_t mem2[64 * 1024]; // a second app for the async-path test
+
+// A network service that always parks (returns kPending) and completes after a
+// fixed number of poll()s, writing a canned response. Exercises the kBusy path
+// without a real network — the app (asynctest) can't tell it was delayed.
+struct ParkingNet : dessen::Services {
+  int ticks = 3;
+  int countdown = 0;
+  uint8_t* resp = nullptr;
+  uint32_t cap = 0;
+  int polls = 0;
+  int netStart(const char*, const uint8_t*, uint32_t, uint8_t* r, uint32_t c) override {
+    resp = r;
+    cap = c;
+    countdown = ticks;
+    return dessen::kPending;
+  }
+  int poll() override {
+    polls++;
+    if (--countdown > 0) return dessen::kPending;
+    static const uint8_t canned[] = {0x00, 0xC8, 0x00, 0x00, 'r', 'e', 'a', 'd', 'y'}; // 200, "ready"
+    if (sizeof canned > cap) return DSN_ERR_TOO_BIG;
+    memcpy(resp, canned, sizeof canned);
+    return 5; // body length
+  }
+};
+
+static void testAsync(const char* appPath) {
+  FILE* f = fopen(appPath, "rb");
+  assert(f && "asynctest.bin missing");
+  const uint32_t n = static_cast<uint32_t>(fread(mem2, 1, sizeof mem2, f));
+  fclose(f);
+  ParkingNet net;
+  dessen::FreeInkHost host;
+  assert(host.load(mem2, n, sizeof mem2));
+  host.setServices(&net);
+  TraceTarget target;
+  DeviceContext dev;
+  dev.width = 400;
+  dev.height = 300;
+  InputSnapshot none;
+  int busyTicks = 0;
+  dessen::State st;
+  for (int i = 0; i < 50; i++) {
+    st = host.step(target, dev, none);
+    if (st == dessen::State::Busy) busyTicks++;
+    if (st == dessen::State::Exited || st == dessen::State::Faulted) break;
+  }
+  assert(st == dessen::State::Exited);
+  assert(host.exitCode() == 0);    // app validated the canned response
+  assert(busyTicks >= 2);          // it really parked across ticks
+  assert(net.polls >= 3);
+}
+
+// Round-trips a PKCS#12 through DesktopServices::pkcs12Parse and checks the blob
+// layout (u16 key length, PKCS#8 key DER, X.509 cert DER).
+static void testPkcs12() {
+  EVP_PKEY* key = EVP_RSA_gen(1024);
+  assert(key);
+  X509* cert = X509_new();
+  ASN1_INTEGER_set(X509_get_serialNumber(cert), 1);
+  X509_gmtime_adj(X509_getm_notBefore(cert), 0);
+  X509_gmtime_adj(X509_getm_notAfter(cert), 3600);
+  X509_set_pubkey(cert, key);
+  X509_NAME* name = X509_get_subject_name(cert);
+  X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, reinterpret_cast<const unsigned char*>("t"), -1, -1, 0);
+  X509_set_issuer_name(cert, name);
+  assert(X509_sign(cert, key, EVP_sha256()));
+  PKCS12* p12 = PKCS12_create("pw", "f", key, cert, nullptr, 0, 0, 0, 0, 0);
+  assert(p12);
+  uint8_t* der = nullptr;
+  const int dl = i2d_PKCS12(p12, &der);
+  assert(dl > 0);
+
+  dessen::DesktopServices svc(".");
+  uint8_t blob[4096];
+  int bl = svc.pkcs12Parse(der, dl, "pw", blob, sizeof blob);
+  assert(bl > 4);
+  const uint32_t keyLen = blob[0] << 8 | blob[1];
+  assert(2 + keyLen < static_cast<uint32_t>(bl));
+  const uint8_t* kp = blob + 2;
+  EVP_PKEY* reKey = d2i_AutoPrivateKey(nullptr, &kp, keyLen);
+  assert(reKey); // the key DER re-parses
+  const uint8_t* cp = blob + 2 + keyLen;
+  X509* reCert = d2i_X509(nullptr, &cp, bl - 2 - keyLen);
+  assert(reCert); // the cert DER re-parses
+  // wrong password is refused
+  assert(svc.pkcs12Parse(der, dl, "wrong", blob, sizeof blob) < 0);
+
+  EVP_PKEY_free(reKey);
+  X509_free(reCert);
+  OPENSSL_free(der);
+  PKCS12_free(p12);
+  X509_free(cert);
+  EVP_PKEY_free(key);
+}
 
 static uint32_t readApp(const char* path) {
   FILE* f = fopen(path, "rb");
@@ -22,7 +124,7 @@ static uint32_t readApp(const char* path) {
 }
 
 int main(int argc, char** argv) {
-  assert(argc == 7);
+  assert(argc == 8);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -145,6 +247,9 @@ int main(int argc, char** argv) {
   // A truncated or garbage image is rejected.
   mem[0] ^= 0xff;
   assert(!host.load(mem, 16, sizeof mem));
+
+  testAsync(argv[7]); // kBusy parking/poll path
+  testPkcs12();       // PKCS#12 parse + blob layout
 
   puts("freeink binding: PASS");
   return 0;

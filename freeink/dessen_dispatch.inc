@@ -34,6 +34,7 @@ case 5: { // device
   const uint32_t info_len = a[1];
   uint8_t* info = static_cast<uint8_t*>(dvm_ptr(vm, a[0], info_len));
   (void)info_len;
+  const uint32_t info_addr = a[0]; (void)info_addr;
   if (!info) { a[0] = static_cast<uint32_t>(-1); break; }
   uint32_t result = 0;
   result = writeDeviceInfo(self.device_, screen, info, info_len);
@@ -161,6 +162,361 @@ case 25: { // bitmap
   const uint32_t rotation = static_cast<uint8_t>(a[5] >> 24); (void)rotation;
   uint32_t result = 0;
   result = drawBitmap(target, screen, x, y, w, h, data, data_len, bw, bh, format, mode, color, rotation);
+  a[0] = result;
+  break;
+}
+case 32: { // time
+  uint32_t result = 0;
+  result = self.services() ? self.services()->timeNow() : 0;
+  a[0] = result;
+  break;
+}
+case 33: { // device_id
+  const uint32_t id_len = a[1];
+  uint8_t* id = static_cast<uint8_t*>(dvm_ptr(vm, a[0], id_len));
+  (void)id_len;
+  const uint32_t id_addr = a[0]; (void)id_addr;
+  if (!id) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcDeviceId(self, id, id_len);
+  a[0] = result;
+  break;
+}
+case 34: { // random_bytes
+  const uint32_t buf_len = a[1];
+  uint8_t* buf = static_cast<uint8_t*>(dvm_ptr(vm, a[0], buf_len));
+  (void)buf_len;
+  const uint32_t buf_addr = a[0]; (void)buf_addr;
+  if (!buf) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  self.randomBytesInto(buf, buf_len); result = buf_len;
+  a[0] = result;
+  break;
+}
+case 40: { // text_input
+  char prompt_buf[kStrMax + 1];
+  const char* prompt = guestStr(vm, a[0], a[1], prompt_buf);
+  if (!prompt) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t text_len = a[3];
+  uint8_t* text = static_cast<uint8_t*>(dvm_ptr(vm, a[2], text_len));
+  (void)text_len;
+  const uint32_t text_addr = a[2]; (void)text_addr;
+  if (!text) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t flags = static_cast<uint8_t>(a[4] >> 0); (void)flags;
+  uint32_t result = 0;
+  return self.beginTextInput(prompt, text, text_len, (int)flags);
+  a[0] = result;
+  break;
+}
+case 48: { // fs_list
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t entries_len = a[3];
+  uint8_t* entries = static_cast<uint8_t*>(dvm_ptr(vm, a[2], entries_len));
+  (void)entries_len;
+  const uint32_t entries_addr = a[2]; (void)entries_addr;
+  if (!entries) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcFs(self, 'l', path, path_len, entries, entries_len, 0, 0);
+  a[0] = result;
+  break;
+}
+case 49: { // fs_read
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t data_len = a[3];
+  uint8_t* data = static_cast<uint8_t*>(dvm_ptr(vm, a[2], data_len));
+  (void)data_len;
+  const uint32_t data_addr = a[2]; (void)data_addr;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcFs(self, 'r', path, path_len, data, data_len, 0, 0);
+  a[0] = result;
+  break;
+}
+case 50: { // fs_write
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t data_len = a[3];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[2], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcFs(self, 'w', path, path_len, (uint8_t*)data, data_len, 0, 0);
+  a[0] = result;
+  break;
+}
+case 51: { // fs_delete
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcFs(self, 'd', path, path_len, 0, 0, 0, 0);
+  a[0] = result;
+  break;
+}
+case 52: { // fs_app_dir
+  const uint32_t path_len = a[1];
+  uint8_t* path = static_cast<uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  const uint32_t path_addr = a[0]; (void)path_addr;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcFs(self, 'a', 0, 0, path, path_len, 0, 0);
+  a[0] = result;
+  break;
+}
+case 53: { // keystore
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t key_len = a[3];
+  const uint8_t* key = static_cast<const uint8_t*>(dvm_ptr(vm, a[2], key_len));
+  (void)key_len;
+  if (!key) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t expires = static_cast<uint32_t>(a[4]); (void)expires;
+  uint32_t result = 0;
+  result = svcFs(self, 'k', path, path_len, (uint8_t*)key, key_len, 0, expires);
+  a[0] = result;
+  break;
+}
+case 56: { // net_request
+  const uint32_t head_len = a[1];
+  const uint8_t* head = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], head_len));
+  (void)head_len;
+  if (!head) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t body_len = a[3];
+  const uint8_t* body = static_cast<const uint8_t*>(dvm_ptr(vm, a[2], body_len));
+  (void)body_len;
+  if (!body) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t resp_len = a[5];
+  uint8_t* resp = static_cast<uint8_t*>(dvm_ptr(vm, a[4], resp_len));
+  (void)resp_len;
+  const uint32_t resp_addr = a[4]; (void)resp_addr;
+  if (!resp) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  return self.beginNet(head, head_len, body, body_len, resp, resp_len);
+  a[0] = result;
+  break;
+}
+case 57: { // fetch_to_sd
+  const uint32_t url_len = a[1];
+  const uint8_t* url = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], url_len));
+  (void)url_len;
+  if (!url) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t dest_len = a[3];
+  const uint8_t* dest = static_cast<const uint8_t*>(dvm_ptr(vm, a[2], dest_len));
+  (void)dest_len;
+  if (!dest) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  return self.beginFetch(url, url_len, dest, dest_len);
+  a[0] = result;
+  break;
+}
+case 64: { // hash
+  const uint32_t algo = static_cast<uint8_t>(a[0] >> 0); (void)algo;
+  const uint32_t data_len = a[2];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[1], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t digest_len = a[4];
+  uint8_t* digest = static_cast<uint8_t*>(dvm_ptr(vm, a[3], digest_len));
+  (void)digest_len;
+  const uint32_t digest_addr = a[3]; (void)digest_addr;
+  if (!digest) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcHash(self, (int)algo, data, data_len, digest, digest_len);
+  a[0] = result;
+  break;
+}
+case 65: { // aes_cbc
+  const uint32_t flags = static_cast<uint8_t>(a[0] >> 0); (void)flags;
+  const uint32_t keyiv_len = a[2];
+  const uint8_t* keyiv = static_cast<const uint8_t*>(dvm_ptr(vm, a[1], keyiv_len));
+  (void)keyiv_len;
+  if (!keyiv) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t data_len = a[4];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[3], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t dst_len = a[6];
+  uint8_t* dst = static_cast<uint8_t*>(dvm_ptr(vm, a[5], dst_len));
+  (void)dst_len;
+  const uint32_t dst_addr = a[5]; (void)dst_addr;
+  if (!dst) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcAes(self, (int)flags, keyiv, keyiv_len, data, data_len, dst, dst_len);
+  a[0] = result;
+  break;
+}
+case 66: { // rsa_keygen
+  const uint32_t bits = static_cast<uint16_t>(a[0] >> 0); (void)bits;
+  const uint32_t pub_len = a[2];
+  uint8_t* pub = static_cast<uint8_t*>(dvm_ptr(vm, a[1], pub_len));
+  (void)pub_len;
+  const uint32_t pub_addr = a[1]; (void)pub_addr;
+  if (!pub) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t priv_len = a[4];
+  uint8_t* priv = static_cast<uint8_t*>(dvm_ptr(vm, a[3], priv_len));
+  (void)priv_len;
+  const uint32_t priv_addr = a[3]; (void)priv_addr;
+  if (!priv) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  return self.beginKeygen(bits, pub, pub_len, priv, priv_len);
+  a[0] = result;
+  break;
+}
+case 67: { // rsa_encrypt
+  const uint32_t cert_len = a[1];
+  const uint8_t* cert = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], cert_len));
+  (void)cert_len;
+  if (!cert) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t data_len = a[3];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[2], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t ct_len = a[5];
+  uint8_t* ct = static_cast<uint8_t*>(dvm_ptr(vm, a[4], ct_len));
+  (void)ct_len;
+  const uint32_t ct_addr = a[4]; (void)ct_addr;
+  if (!ct) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcRsa(self, 'e', 0, cert, cert_len, data, data_len, ct, ct_len);
+  a[0] = result;
+  break;
+}
+case 68: { // rsa_decrypt
+  const uint32_t flags = static_cast<uint8_t>(a[0] >> 0); (void)flags;
+  const uint32_t priv_len = a[2];
+  const uint8_t* priv = static_cast<const uint8_t*>(dvm_ptr(vm, a[1], priv_len));
+  (void)priv_len;
+  if (!priv) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t data_len = a[4];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[3], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t pt_len = a[6];
+  uint8_t* pt = static_cast<uint8_t*>(dvm_ptr(vm, a[5], pt_len));
+  (void)pt_len;
+  const uint32_t pt_addr = a[5]; (void)pt_addr;
+  if (!pt) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcRsa(self, 'd', (int)flags, priv, priv_len, data, data_len, pt, pt_len);
+  a[0] = result;
+  break;
+}
+case 69: { // rsa_sign
+  const uint32_t algo = static_cast<uint8_t>(a[0] >> 0); (void)algo;
+  const uint32_t priv_len = a[2];
+  const uint8_t* priv = static_cast<const uint8_t*>(dvm_ptr(vm, a[1], priv_len));
+  (void)priv_len;
+  if (!priv) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t digest_len = a[4];
+  const uint8_t* digest = static_cast<const uint8_t*>(dvm_ptr(vm, a[3], digest_len));
+  (void)digest_len;
+  if (!digest) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t sig_len = a[6];
+  uint8_t* sig = static_cast<uint8_t*>(dvm_ptr(vm, a[5], sig_len));
+  (void)sig_len;
+  const uint32_t sig_addr = a[5]; (void)sig_addr;
+  if (!sig) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcRsa(self, 's', (int)algo, priv, priv_len, digest, digest_len, sig, sig_len);
+  a[0] = result;
+  break;
+}
+case 70: { // pkcs12_parse
+  const uint32_t p12_len = a[1];
+  const uint8_t* p12 = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], p12_len));
+  (void)p12_len;
+  if (!p12) { a[0] = static_cast<uint32_t>(-1); break; }
+  char pass_buf[kStrMax + 1];
+  const char* pass = guestStr(vm, a[2], a[3], pass_buf);
+  if (!pass) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t blob_len = a[5];
+  uint8_t* blob = static_cast<uint8_t*>(dvm_ptr(vm, a[4], blob_len));
+  (void)blob_len;
+  const uint32_t blob_addr = a[4]; (void)blob_addr;
+  if (!blob) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcPkcs12(self, p12, p12_len, pass, blob, blob_len);
+  a[0] = result;
+  break;
+}
+case 71: { // secure_wrap
+  const uint32_t data_len = a[1];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t blob_len = a[3];
+  uint8_t* blob = static_cast<uint8_t*>(dvm_ptr(vm, a[2], blob_len));
+  (void)blob_len;
+  const uint32_t blob_addr = a[2]; (void)blob_addr;
+  if (!blob) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcSecure(self, 1, data, data_len, blob, blob_len);
+  a[0] = result;
+  break;
+}
+case 72: { // secure_unwrap
+  const uint32_t blob_len = a[1];
+  const uint8_t* blob = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], blob_len));
+  (void)blob_len;
+  if (!blob) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t data_len = a[3];
+  uint8_t* data = static_cast<uint8_t*>(dvm_ptr(vm, a[2], data_len));
+  (void)data_len;
+  const uint32_t data_addr = a[2]; (void)data_addr;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcSecure(self, 0, blob, blob_len, data, data_len);
+  a[0] = result;
+  break;
+}
+case 80: { // backlight
+  const int32_t brightness = static_cast<int16_t>(a[0] >> 0); (void)brightness;
+  const int32_t warm = static_cast<int16_t>(a[0] >> 16); (void)warm;
+  uint32_t result = 0;
+  result = self.services() ? self.services()->backlightSet(brightness, warm) : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
+case 81: { // backlight_get
+  uint32_t result = 0;
+  result = self.services() ? self.services()->backlightGet() : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
+case 82: { // battery
+  uint32_t result = 0;
+  result = self.services() ? self.services()->battery() : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
+case 83: { // haptic
+  const uint32_t ms = static_cast<uint16_t>(a[0] >> 0); (void)ms;
+  const uint32_t intensity = static_cast<uint8_t>(a[0] >> 16); (void)intensity;
+  uint32_t result = 0;
+  result = self.services() ? self.services()->haptic((int)ms, (int)intensity) : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
+case 84: { // accel
+  const uint32_t xyz_len = a[1];
+  uint8_t* xyz = static_cast<uint8_t*>(dvm_ptr(vm, a[0], xyz_len));
+  (void)xyz_len;
+  const uint32_t xyz_addr = a[0]; (void)xyz_addr;
+  if (!xyz) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcAccel(self, xyz, xyz_len);
   a[0] = result;
   break;
 }
