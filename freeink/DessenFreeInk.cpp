@@ -3,13 +3,6 @@
 #include <cstdio>
 #include <cstring>
 
-#include <FreeInkUILayout.h>
-#include <components/controls/button.h>
-#include <components/controls/checkbox.h>
-#include <components/controls/progress-bar.h>
-#include <components/controls/toggle.h>
-#include <components/lists/setting-row.h>
-
 #include "../sdk/dessen_abi.h"
 #include "DessenServices.h"
 
@@ -150,163 +143,6 @@ uint32_t drawBitmap(DrawTarget& target, View screen, int32_t x, int32_t y, int32
   return 0;
 }
 
-using Interactions = InteractionBuffer<kUiMaxInteractions>;  // the app's per-pass hit table
-
-// The device's selection-row style (the LightPill theme the firmware ships):
-// the selected row is a light-gray dither fill with black ink, a disabled row
-// dims its label. Passed to the real fui components so an app's rows match the
-// rest of the device. ponytail: this is the one shipping theme; plumb it from
-// the firmware if a second ever ships.
-StyleSet listRowStyles() {
-  StyleSet s;
-  s.explicitlySet = true;
-  s.normal.background = Paint::solid(Color::White);
-  s.normal.foreground = Paint::solid(Color::Black);
-  s.selected.background = Paint::dither(Color::LightGray);
-  s.selected.foreground = Paint::solid(Color::Black);
-  s.active = s.selected;
-  s.disabled.background = Paint::solid(Color::White);
-  s.disabled.foreground = Paint::dither(Color::LightGray);
-  return s;
-}
-
-// One menu row, drawn by the real fui setting-row component: the selected row
-// gets the device's selection highlight, a disabled row is dimmed and drops its
-// chevron, an enabled row can show a trailing ">" marking that it opens another
-// screen. Non-interactive (the app owns layout, scrolling and tap math); it
-// just draws the row so a menu matches the system UI. (list.h is the
-// interactive, scrolling list — add it when an app needs routing + a viewport.)
-uint32_t drawListRow(DrawTarget& target, const DeviceContext& device, Interactions& ib, View screen, int32_t x,
-                     int32_t y, int32_t w, int32_t h, const char* label, uint32_t flags) {
-  const Rect r = clip(x, y, w, h, screen);
-  if (r.empty()) return static_cast<uint32_t>(-1);
-  InputSnapshot none{};
-  Frame<kUiMaxInteractions> frame(target, device, none, ib);
-  SettingRowProps props;
-  props.label = label;
-  props.styles = listRowStyles();
-  props.enabled = !(flags & DSN_ROW_DISABLED);
-  props.state = (flags & DSN_ROW_SELECTED) ? StateSelected : StateNormal;
-  props.drawChevron = (flags & DSN_ROW_CHEVRON) && props.enabled;
-  settingRow(frame, r, props);  // action stays NO_ACTION: draws, registers no hit
-  return 0;
-}
-
-// Both LE, so a straight copy of four int16s matches the guest dsn_rect_t.
-void putRect(uint8_t* out, Rect r) {
-  const int16_t v[4] = {r.x, r.y, r.width, r.height};
-  memcpy(out, v, sizeof v);
-}
-
-// One cell of a cols×rows grid inside (x,y,w,h), via the firmware's own layout
-// engine (layoutTree Grid). Writes the cell's rect; -1 on a span out of range.
-uint32_t layoutGridCell(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t cols, uint32_t rows, uint32_t gap,
-                        uint32_t col, uint32_t row, uint32_t colspan, uint32_t rowspan, uint8_t* out, uint32_t outLen) {
-  if (outLen < 8) return static_cast<uint32_t>(-1);
-  LayoutNode child;
-  child.id = "c";
-  child.column = static_cast<uint8_t>(col);
-  child.row = static_cast<uint8_t>(row);
-  child.columnSpan = static_cast<uint8_t>(colspan);
-  child.rowSpan = static_cast<uint8_t>(rowspan);
-  LayoutNode grid;
-  grid.kind = LayoutKind::Grid;
-  grid.columns = static_cast<uint8_t>(cols);
-  grid.rows = static_cast<uint8_t>(rows);
-  grid.gap = static_cast<int16_t>(gap);
-  grid.children = &child;
-  grid.childCount = 1;
-  Rect cell{};
-  bool got = false;
-  layoutTree(grid, Rect{static_cast<int16_t>(x), static_cast<int16_t>(y), static_cast<int16_t>(w),
-                        static_cast<int16_t>(h)},
-             [&](const char*, Rect r) { cell = r; got = true; });  // engine rejects a bad span by not emitting
-  if (!got) return static_cast<uint32_t>(-1);
-  putRect(out, cell);
-  return 0;
-}
-
-// Split (x,y,w,h) along `axis` into slots sized by the `lengths` blob (4 bytes
-// each: u8 kind, i16 value LE, u8 flex), via the engine's layoutLinear. Writes
-// one dsn_rect_t per slot; returns the slot count, or -1 on bad/too-small args.
-uint32_t layoutSplit(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t axis, uint32_t gap, const uint8_t* lengths,
-                     uint32_t lenBytes, uint8_t* out, uint32_t outLen) {
-  const uint32_t count = lenBytes / 4;
-  if (count == 0 || count > 64 || outLen < count * 8) return static_cast<uint32_t>(-1);
-  layoutLinear(
-      Rect{static_cast<int16_t>(x), static_cast<int16_t>(y), static_cast<int16_t>(w), static_cast<int16_t>(h)},
-      axis ? Axis::Column : Axis::Row, static_cast<int16_t>(gap), static_cast<uint8_t>(count),
-      [&](uint8_t i) {
-        const uint8_t* p = lengths + i * 4;
-        const int16_t value = static_cast<int16_t>(p[1] | p[2] << 8);
-        return p[0] == DSN_LEN_FIXED ? LayoutLength::fixed(value) : LayoutLength::flexible(p[3] ? p[3] : 1, value);
-      },
-      [&](uint8_t i, Rect r) { putRect(out + i * 8, r); });
-  return count;
-}
-
-// ---- Interactive widgets (the real fui components) --------------------------
-// Each draws one component and registers its hit rect in the host's interaction
-// buffer, so ui_event() can route a tap or button-nav to the component's action
-// the way the firmware's own screens do. The app still lays widgets out and
-// calls ui_begin()/ui_event(); it does not do its own hit-testing.
-uint32_t drawButton(DrawTarget& target, const DeviceContext& device, Interactions& ib, View screen, int32_t x,
-                    int32_t y, int32_t w, int32_t h, const char* label, uint32_t action, uint32_t flags) {
-  const Rect r = clip(x, y, w, h, screen);
-  if (r.empty()) return static_cast<uint32_t>(-1);
-  InputSnapshot none{};  // drawing registers hits + reads focus; routing is separate
-  Frame<kUiMaxInteractions> frame(target, device, none, ib);
-  ButtonProps props;
-  props.label = label;
-  props.action = static_cast<ActionId>(action);
-  props.enabled = !(flags & DSN_W_DISABLED);
-  button(frame, r, props);
-  return 0;
-}
-
-uint32_t drawCheckbox(DrawTarget& target, const DeviceContext& device, Interactions& ib, View screen, int32_t x,
-                      int32_t y, int32_t w, int32_t h, const char* label, uint32_t action, uint32_t flags) {
-  const Rect r = clip(x, y, w, h, screen);
-  if (r.empty()) return static_cast<uint32_t>(-1);
-  InputSnapshot none{};
-  Frame<kUiMaxInteractions> frame(target, device, none, ib);
-  CheckboxProps props;
-  props.label = label;
-  props.action = static_cast<ActionId>(action);
-  props.checked = flags & DSN_W_CHECKED;
-  props.enabled = !(flags & DSN_W_DISABLED);
-  checkbox(frame, r, props);
-  return 0;
-}
-
-uint32_t drawToggle(DrawTarget& target, const DeviceContext& device, Interactions& ib, View screen, int32_t x,
-                    int32_t y, int32_t w, int32_t h, uint32_t action, uint32_t flags) {
-  const Rect r = clip(x, y, w, h, screen);
-  if (r.empty()) return static_cast<uint32_t>(-1);
-  InputSnapshot none{};
-  Frame<kUiMaxInteractions> frame(target, device, none, ib);
-  ToggleProps props;
-  props.action = static_cast<ActionId>(action);
-  props.checked = flags & DSN_W_CHECKED;  // "on"
-  props.enabled = !(flags & DSN_W_DISABLED);
-  toggle(frame, r, props);
-  return 0;
-}
-
-uint32_t drawProgress(DrawTarget& target, const DeviceContext& device, Interactions& ib, View screen, int32_t x,
-                      int32_t y, int32_t w, int32_t h, uint32_t permille) {
-  const Rect r = clip(x, y, w, h, screen);
-  if (r.empty()) return static_cast<uint32_t>(-1);
-  InputSnapshot none{};
-  Frame<kUiMaxInteractions> frame(target, device, none, ib);
-  ProgressBarProps props;
-  props.value = permille > 1000 ? 1000 : static_cast<int32_t>(permille);
-  props.max = 1000;
-  props.border = Paint::solid(Color::Black);
-  props.borderWidth = 1;
-  progressBar(frame, r, props);
-  return 0;
-}
 
 // ---- Capability sanitizers. Every app value reaches a Services method only
 // ---- through one of these. Each rejects bad input rather than trusting it. ----
@@ -449,24 +285,6 @@ void FreeInkHost::finishAsync(int code) {
   asyncPending_ = false;
 }
 
-uint32_t FreeInkHost::routeUi(const freeink::ui::InputSnapshot& input) {
-  using namespace freeink::ui;
-  // dessen delivers semantic PREV/NEXT; drive widget focus with them (page-turn
-  // style prev/next dispatch isn't used here), keep touch/confirm/back as-is.
-  InputSnapshot ri = input;
-  ri.focusPrev = input.focusPrev || input.prev;
-  ri.focusNext = input.focusNext || input.next;
-  ri.prev = ri.next = false;
-  const int16_t before = interactions_.focusedIndex();
-  const ActionEvent e = interactions_.route(ri);
-  if (e.action != NO_ACTION)  // a widget fired: action in low 16, value in high 16
-    return static_cast<uint32_t>(e.action) | static_cast<uint32_t>(static_cast<uint16_t>(e.value)) << 16;
-  if (interactions_.focusedIndex() != before)  // focus moved: ask the app to repaint
-    return static_cast<uint32_t>(DSN_UI_REDRAW) << 16;
-  if (input.back) return static_cast<uint32_t>(DSN_UI_BACK) << 16;  // back, no widget handler
-  return 0;
-}
-
 State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const InputSnapshot& input, uint32_t budget) {
   if (state_ == State::Exited || state_ == State::Faulted) return state_;
   if (state_ == State::Busy) {
@@ -474,10 +292,9 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
     if (code == kPending) return state_; // still working; try again next tick
     finishAsync(code);                   // result ready: resume the VM below
   } else if (state_ == State::Waiting) {
-    const uint32_t ev = uiWait_ ? routeUi(input) : eventOf(input, viewOf(device));
+    const uint32_t ev = eventOf(input, viewOf(device));
     if (!ev) return state_;
-    vm_.x[10] = ev; // wait_event's / ui_event's return value
-    uiWait_ = false;
+    vm_.x[10] = ev; // wait_event's return value
   }
   target_ = &target;
   device_ = device;

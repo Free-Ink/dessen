@@ -124,7 +124,7 @@ static uint32_t readApp(const char* path) {
 }
 
 int main(int argc, char** argv) {
-  assert(argc == 9);
+  assert(argc == 8);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -218,10 +218,7 @@ int main(int argc, char** argv) {
   while (host.step(target, screen, none) == dessen::State::Running) {}
   assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
   assert(shows("fill 10,10 50x30 c4") && shows("stroke 0,0 40x40 w3") && shows("triangle"));
-  assert(shows("text 0,100 wrapped and centred") && shows("bitmap 200,10 8x8 src 8x8"));
-  // list_row: selected row fills its rect with the LightGray (c2) selection,
-  // draws a chevron (2 lines), and centres the label; the off-screen row is clipped.
-  assert(shows("fill 8,300 464x52 c2") && shows("text 16,300 Menu") && target.lines == 3);
+  assert(shows("text 0,100 wrapped and centred") && shows("bitmap 200,10 8x8 src 8x8") && target.lines == 1);
 
   // Safe area: with bezel insets the app's (0,0) moves inside them, clear
   // still wipes the whole panel, and taps are reported in app coordinates.
@@ -253,42 +250,6 @@ int main(int argc, char** argv) {
 
   testAsync(argv[7]); // kBusy parking/poll path
   testPkcs12();       // PKCS#12 parse + blob layout
-
-  // widgets: the fui interaction model (ui_begin/widgets/ui_event). A tap routes
-  // straight to the control under it; button-nav moves focus and confirm fires
-  // the focused control; an unconsumed Back quits. The Done button exits 7.
-  auto deliver = [&](InputSnapshot in) {
-    dessen::State s = host.step(target, screen, in);
-    while (s == dessen::State::Running) s = host.step(target, screen, none);
-    return s;
-  };
-  // tap the Done button (centre ~ 240, 264) -> action fires -> exit 7
-  assert(host.load(mem, readApp(argv[8]), sizeof mem));
-  deliver(none);  // run to the first ui_event wait
-  InputSnapshot tapDone;
-  tapDone.touchReleased = true;
-  tapDone.touchX = 240;
-  tapDone.touchY = 264;
-  assert(deliver(tapDone) == dessen::State::Exited && host.exitCode() == 7);
-
-  // button nav: next x3 focuses Done (past the two checkboxes), confirm fires it
-  assert(host.load(mem, readApp(argv[8]), sizeof mem));
-  deliver(none);
-  InputSnapshot nx;
-  nx.next = true;
-  deliver(nx);
-  deliver(nx);
-  deliver(nx);
-  InputSnapshot cf;
-  cf.confirm = true;
-  assert(deliver(cf) == dessen::State::Exited && host.exitCode() == 7);
-
-  // an unconsumed Back quits (exit 0)
-  assert(host.load(mem, readApp(argv[8]), sizeof mem));
-  deliver(none);
-  InputSnapshot bk;
-  bk.back = true;
-  assert(deliver(bk) == dessen::State::Exited && host.exitCode() == 0);
 
   puts("freeink binding: PASS");
   return 0;

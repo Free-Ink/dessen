@@ -165,63 +165,6 @@ case 25: { // bitmap
   a[0] = result;
   break;
 }
-case 26: { // list_row
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  char label_buf[kStrMax + 1];
-  const char* label = guestStr(vm, a[2], a[3], label_buf);
-  if (!label) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t flags = static_cast<uint8_t>(a[4] >> 0); (void)flags;
-  uint32_t result = 0;
-  result = drawListRow(target, self.device_, self.interactions_, screen, x, y, w, h, label, flags);
-  a[0] = result;
-  break;
-}
-case 27: { // grid_cell
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  const uint32_t cols = static_cast<uint8_t>(a[2] >> 0); (void)cols;
-  const uint32_t rows = static_cast<uint8_t>(a[2] >> 8); (void)rows;
-  const uint32_t gap = static_cast<uint8_t>(a[2] >> 16); (void)gap;
-  const uint32_t col = static_cast<uint8_t>(a[2] >> 24); (void)col;
-  const uint32_t row = static_cast<uint8_t>(a[3] >> 0); (void)row;
-  const uint32_t colspan = static_cast<uint8_t>(a[3] >> 8); (void)colspan;
-  const uint32_t rowspan = static_cast<uint8_t>(a[3] >> 16); (void)rowspan;
-  const uint32_t cell_len = a[5];
-  uint8_t* cell = static_cast<uint8_t*>(dvm_ptr(vm, a[4], cell_len));
-  (void)cell_len;
-  const uint32_t cell_addr = a[4]; (void)cell_addr;
-  if (!cell) { a[0] = static_cast<uint32_t>(-1); break; }
-  uint32_t result = 0;
-  result = layoutGridCell(x, y, w, h, cols, rows, gap, col, row, colspan, rowspan, cell, cell_len);
-  a[0] = result;
-  break;
-}
-case 28: { // split
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  const uint32_t axis = static_cast<uint8_t>(a[2] >> 0); (void)axis;
-  const uint32_t gap = static_cast<uint8_t>(a[2] >> 8); (void)gap;
-  const uint32_t lengths_len = a[4];
-  const uint8_t* lengths = static_cast<const uint8_t*>(dvm_ptr(vm, a[3], lengths_len));
-  (void)lengths_len;
-  if (!lengths) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t slots_len = a[6];
-  uint8_t* slots = static_cast<uint8_t*>(dvm_ptr(vm, a[5], slots_len));
-  (void)slots_len;
-  const uint32_t slots_addr = a[5]; (void)slots_addr;
-  if (!slots) { a[0] = static_cast<uint32_t>(-1); break; }
-  uint32_t result = 0;
-  result = layoutSplit(x, y, w, h, axis, gap, lengths, lengths_len, slots, slots_len);
-  a[0] = result;
-  break;
-}
 case 32: { // time
   uint32_t result = 0;
   result = self.services() ? self.services()->timeNow() : 0;
@@ -273,71 +216,6 @@ case 40: { // text_input
   const uint32_t flags = static_cast<uint8_t>(a[4] >> 0); (void)flags;
   uint32_t result = 0;
   return self.beginTextInput(prompt, text, text_len, (int)flags);
-  a[0] = result;
-  break;
-}
-case 41: { // ui_begin
-  uint32_t result = 0;
-  self.interactions_.clear();
-  a[0] = result;
-  break;
-}
-case 42: { // ui_event
-  uint32_t result = 0;
-  self.uiWait_ = true; return kWait;
-  a[0] = result;
-  break;
-}
-case 43: { // button
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  char label_buf[kStrMax + 1];
-  const char* label = guestStr(vm, a[2], a[3], label_buf);
-  if (!label) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t action = static_cast<uint16_t>(a[4] >> 0); (void)action;
-  const uint32_t flags = static_cast<uint8_t>(a[4] >> 16); (void)flags;
-  uint32_t result = 0;
-  result = drawButton(target, self.device_, self.interactions_, screen, x, y, w, h, label, action, flags);
-  a[0] = result;
-  break;
-}
-case 44: { // checkbox
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  char label_buf[kStrMax + 1];
-  const char* label = guestStr(vm, a[2], a[3], label_buf);
-  if (!label) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t action = static_cast<uint16_t>(a[4] >> 0); (void)action;
-  const uint32_t flags = static_cast<uint8_t>(a[4] >> 16); (void)flags;
-  uint32_t result = 0;
-  result = drawCheckbox(target, self.device_, self.interactions_, screen, x, y, w, h, label, action, flags);
-  a[0] = result;
-  break;
-}
-case 45: { // toggle
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  const uint32_t action = static_cast<uint16_t>(a[2] >> 0); (void)action;
-  const uint32_t flags = static_cast<uint8_t>(a[2] >> 16); (void)flags;
-  uint32_t result = 0;
-  result = drawToggle(target, self.device_, self.interactions_, screen, x, y, w, h, action, flags);
-  a[0] = result;
-  break;
-}
-case 46: { // progress_bar
-  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
-  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
-  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
-  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
-  const uint32_t permille = static_cast<uint16_t>(a[2] >> 0); (void)permille;
-  uint32_t result = 0;
-  result = drawProgress(target, self.device_, self.interactions_, screen, x, y, w, h, permille);
   a[0] = result;
   break;
 }

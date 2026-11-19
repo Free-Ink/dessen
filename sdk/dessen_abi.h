@@ -35,42 +35,6 @@
 
 #define DSN_CORNERS_ALL 15
 
-// list_row() flags: draw a menu row the way the firmware's own lists do, so an
-// app's menu matches the system UI. The app still owns layout, scrolling and
-// tap math; list_row draws one row at (x, y, w, h).
-#define DSN_ROW_SELECTED 1  // the highlighted row (system selection style)
-#define DSN_ROW_DISABLED 2  // dimmed and non-actionable; drops the chevron
-#define DSN_ROW_CHEVRON  4  // trailing ">": the row opens another screen
-
-// Layout engine (dsn_grid_cell / dsn_split): the firmware's own geometry, so a
-// grid or a row/column of panels lines up the way the rest of the device does.
-// Both are pure math — they only compute rects, they draw nothing.
-#ifndef __ASSEMBLER__
-typedef struct {
-  short x, y, w, h;
-} dsn_rect_t;  /* 8 bytes; one slot/cell that a layout call writes back */
-#endif
-#define DSN_AXIS_ROW 0  // dsn_split: lay the slots out left-to-right (columns)
-#define DSN_AXIS_COL 1  // dsn_split: lay the slots out top-to-bottom (rows)
-// dsn_split slot encoding: 4 bytes each — {u8 kind, i16 value (LE), u8 flex}.
-#define DSN_LEN_FLEX  0  // share leftover space by `flex` weight; value = min px
-#define DSN_LEN_FIXED 1  // exactly `value` px
-
-// Interactive widgets (dsn_button / dsn_checkbox / dsn_toggle). The app gives
-// each a nonzero `action` id (1..65535) and draws it between dsn_ui_begin() and
-// dsn_ui_event(); the firmware draws the real control and routes taps/buttons.
-#define DSN_W_DISABLED 1  // dimmed, not actionable
-#define DSN_W_CHECKED  2  // checkbox ticked / toggle on
-
-// dsn_ui_event() result: a widget fired when DSN_UI_ACTION != 0 (its id, with
-// DSN_UI_VALUE the component's value); otherwise DSN_UI_SYS carries a system
-// code. The loop is: ui_begin -> draw widgets -> refresh -> e = ui_event.
-#define DSN_UI_ACTION(e) ((unsigned)(e) & 0xffff)
-#define DSN_UI_VALUE(e)  ((short)((unsigned)(e) >> 16))
-#define DSN_UI_SYS(e)    ((unsigned)(e) >> 16)  // meaningful only when DSN_UI_ACTION == 0
-#define DSN_UI_BACK   1  // Back pressed and no widget consumed it (usually: exit)
-#define DSN_UI_REDRAW 2  // focus moved (button nav) — repaint to show the highlight
-
 // 1-bit bitmaps, row-major, most significant bit first.
 #define DSN_BITMAP_MASK 0 // set bits are drawn in the given colour
 #define DSN_BITMAP_BW 1   // set bits black, clear bits white

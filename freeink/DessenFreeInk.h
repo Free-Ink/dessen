@@ -9,9 +9,6 @@
 
 namespace dessen {
 
-// Hit rects an app can register in one render pass (fui interaction model).
-inline constexpr unsigned kUiMaxInteractions = 64;
-
 enum class State : uint8_t {
   Running, // call step() again
   Waiting, // blocked until the next input event
@@ -85,12 +82,6 @@ class FreeInkHost {
   static int onEcall(dvm_t* vm, void* self);
   uint32_t nextRandom();
 
-  // Route an input event through the hit rects the app's render pass registered
-  // (the fui interaction model): returns a packed widget action/value, a system
-  // code (back / focus moved), or 0 for nothing. Used when the app parked on
-  // ui_event() instead of wait_event().
-  uint32_t routeUi(const freeink::ui::InputSnapshot& input);
-
   void finishAsync(int code); // write a completed async result into x[10]
 
   dvm_t vm_{};
@@ -105,10 +96,6 @@ class FreeInkHost {
   int launchHomeDest_ = 0;
   freeink::ui::DrawTarget* target_ = nullptr;
   freeink::ui::DeviceContext device_{};
-  // The widgets the current render pass registered, and whether the app parked
-  // on ui_event() (route them) rather than wait_event() (raw semantic events).
-  freeink::ui::InteractionBuffer<kUiMaxInteractions> interactions_{};
-  bool uiWait_ = false;
 
  public:
   void randomBytesInto(uint8_t* out, uint32_t n); // fills from service or fallback
