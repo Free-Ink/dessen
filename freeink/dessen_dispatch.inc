@@ -609,3 +609,18 @@ case 103: { // wifi_connect
   a[0] = result;
   break;
 }
+case 105: { // book_cover
+  char path_buf[kStrMax + 1];
+  const char* path = guestStr(vm, a[0], a[1], path_buf);
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t height = static_cast<uint16_t>(a[2] >> 0); (void)height;
+  const uint32_t pixels_len = a[4];
+  uint8_t* pixels = static_cast<uint8_t*>(dvm_ptr(vm, a[3], pixels_len));
+  (void)pixels_len;
+  const uint32_t pixels_addr = a[3]; (void)pixels_addr;
+  if (!pixels) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = self.services() ? self.services()->bookCover(path, (uint32_t)height, pixels, pixels_len) : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}

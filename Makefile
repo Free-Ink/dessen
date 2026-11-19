@@ -59,6 +59,8 @@ test: all
 	printf cb | build/dessen build/dice.bin | grep -q 'Last:  d20='
 	printf b | build/dessen build/sudoku.bin | grep -q 'cells left'
 	printf c | build/dessen build/home.bin | grep -q 'launch reader /books/dune.epub'
+	printf nc | build/dessen build/home.bin | grep -q 'launch reader /books/neuromancer.epub'
+	build/dessen build/home.bin </dev/null | grep -q '37%'
 	@tmp=$$(mktemp -d); DESSEN_FS_ROOT=$$tmp build/dessen build/captest.bin; rc=$$?; rm -rf $$tmp; test $$rc -eq 0 && echo 'captest: PASS'
 	@nr=$$(mktemp -d); fs=$$(mktemp -d); mkdir -p $$nr/example.test; \
 	  printf 'hello world' > $$nr/example.test/hello; \

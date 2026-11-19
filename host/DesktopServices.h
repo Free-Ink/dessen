@@ -30,6 +30,7 @@ class DesktopServices : public Services {
   // launcher/home
   int recents(char* out, uint32_t cap) override;
   int library(char* out, uint32_t cap) override;
+  int bookCover(const char*, uint32_t, uint8_t*, uint32_t) override { return 0; }  // desktop has no covers
   int bookProgress(const char* path) override;
   int fontLoad(const char* path, int size) override;
   std::string lastFontPath;

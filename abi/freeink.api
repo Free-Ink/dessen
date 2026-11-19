@@ -93,3 +93,4 @@
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 102 font_load(buf path, u16 size) -> i32 : result = svcFontLoad(self, path, path_len, (int)size);
 103 wifi_connect() -> i32 : return self.beginWifi();
+105 book_cover(str path, u16 height, out pixels) -> i32 : result = self.services() ? self.services()->bookCover(path, (uint32_t)height, pixels, pixels_len) : DSN_ERR_UNAVAILABLE;

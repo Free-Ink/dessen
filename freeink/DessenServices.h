@@ -41,10 +41,16 @@ class Services {
   virtual int recents(char*, uint32_t) { return -4; }
   // Title-sorted index records in recents() format, with percent set to -1.
   // Returns only complete records that fit, or zero if the index is absent.
+  // CrossPoint collapses entries with identical title and author.
   // Call bookProgress() for the books you display.
   virtual int library(char*, uint32_t) { return -4; }
   // Saved reading progress for a book: 0-100, or -1 if none.
   virtual int bookProgress(const char*) { return -1; }
+  // A book's cover as a 1-bit bitmap scaled to `height`: writes {u16 w, u16 h}
+  // then w*h MSB-first bits. Returns bytes written, 0 if the book has no cover,
+  // or DSN_ERR_UNAVAILABLE where covers aren't supported (no PSRAM). May be slow
+  // the first time (the cover is decoded and cached), so request one per redraw.
+  virtual int bookCover(const char*, uint32_t, uint8_t*, uint32_t) { return -4; }
   // Load a font from the app's folder for this app's custom font slot; returns
   // DSN_FONT_CUSTOM on success. `size` is the point size (vector fonts).
   virtual int fontLoad(const char*, int) { return -4; }

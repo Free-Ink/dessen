@@ -146,8 +146,11 @@ int DesktopServices::recents(char* out, uint32_t cap) {
 }
 
 int DesktopServices::library(char* out, uint32_t cap) {
-  return give(reinterpret_cast<const uint8_t*>(libraryFixture.data()), libraryFixture.size(),
-              reinterpret_cast<uint8_t*>(out), cap);
+  if (cap == 0) return 0;
+  const size_t end = libraryFixture.rfind('\n', cap - 1);
+  if (end == std::string::npos) return 0;
+  memcpy(out, libraryFixture.data(), end + 1);
+  return static_cast<int>(end + 1);
 }
 
 int DesktopServices::fontLoad(const char* path, int size) {
