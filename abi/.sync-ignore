@@ -1,0 +1,5 @@
+# DrawTarget methods dessen deliberately does not expose, one per line.
+# Listed here so `make sync` stays quiet until FreeInk adds something new.
+clipRect      # app draws in a clipped safe area already; per-call clipping unneeded so far
+setClipRect   # ditto
+inkBounds     # glyph-ink metrics; measure_text/line_height cover app layout needs

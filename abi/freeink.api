@@ -1,0 +1,38 @@
+# The dessen app API: a projection of the FreeInk SDK.
+#
+#   <number> <name>(<type> <arg>, ...) [-> <type>] : <host C++ statement>
+#
+# tools/gen_api.py turns this file into the app-side wrappers (sdk/) and the
+# firmware-side dispatch (freeink/). To expose something new, add one line.
+#
+# Numbers are a compatibility promise: append, never renumber or reuse.
+# Types: i32 u32 | i16 u16 u8 (neighbours share one register) |
+#        str (text, NUL-terminated copy on the host) | buf (bytes, bounds-checked)
+#        out (bytes the host writes back, bounds-checked)
+# A call takes at most 7 registers. The statement sees its arguments as local
+# variables plus `target`, `screen`, `self` and `vm`; set `result` to return a value.
+#
+# Coordinates: apps draw in the device's safe area. (0, 0) is its top-left
+# corner and `screen` is its size, so nothing an app draws lands under a bezel
+# or rounded corner. clip() and pin() translate to panel coordinates.
+# Every value from an app is untrusted: clip, pin or range-check it here.
+
+# --- core (0-15) ---
+0  exit(i32 code)             : return kExit;
+1  wait_event() -> u32        : return kWait;
+2  refresh()                  : self.refresh_ = true; return kYield;
+3  screen() -> u32            : result = static_cast<uint32_t>(screen.width) << 16 | static_cast<uint16_t>(screen.height);
+4  random() -> u32            : result = self.nextRandom();
+5  device(out info) -> u32    : result = writeDeviceInfo(self.device_, screen, info, info_len);
+
+# --- freeink::ui::DrawTarget (16-31) ---
+16 clear()                    : target.fill(self.device_.screen(), Paint::solid(Color::White));
+17 fill(i16 x, i16 y, i16 w, i16 h, u8 color) : if (const Rect r = clip(x, y, w, h, screen); !r.empty()) target.fill(r, paint(color));
+18 fill_round(i16 x, i16 y, i16 w, i16 h, u8 color, u8 radius, u8 corners) : if (const Rect r = clip(x, y, w, h, screen); !r.empty()) target.fill(r, paint(color), radius, corners & CornersAll);
+19 stroke(i16 x, i16 y, i16 w, i16 h, u8 color, u8 width, u8 radius, u8 corners) : if (const Rect r = clip(x, y, w, h, screen); !r.empty()) target.stroke(r, paint(color), width ? width : 1, radius, corners & CornersAll);
+20 line(i16 x0, i16 y0, i16 x1, i16 y1, u8 width, u8 color) : if (screen.width > 0 && screen.height > 0) target.line(pin(x0, y0, screen), pin(x1, y1, screen), width < 1 ? 1 : width > 8 ? 8 : width, paint(color));
+21 triangle(i16 ax, i16 ay, i16 bx, i16 by, i16 cx, i16 cy, u8 color) : if (screen.width > 0 && screen.height > 0) target.triangle(pin(ax, ay, screen), pin(bx, by, screen), pin(cx, cy, screen), paint(color));
+22 text_box(i16 x, i16 y, i16 w, i16 h, str s, u8 font, u8 align, u8 max_lines, u8 flags) -> i32 : result = drawText(target, screen, x, y, w, h, s, textStyle(font, align, max_lines, flags));
+23 measure_text(str s, u8 font, u8 flags) -> u32 : { const TextStyle st = textStyle(font, 0, 1, flags); const Size m = target.measureText(st.font, s, st); result = static_cast<uint32_t>(static_cast<uint16_t>(m.width)) << 16 | static_cast<uint16_t>(m.height); }
+24 line_height(u8 font) -> i32 : result = static_cast<uint32_t>(target.lineHeight(textStyle(font, 0, 1, 0).font));
+25 bitmap(i16 x, i16 y, i16 w, i16 h, buf data, u16 bw, u16 bh, u8 format, u8 mode, u8 color, u8 rotation) -> i32 : result = drawBitmap(target, screen, x, y, w, h, data, data_len, bw, bh, format, mode, color, rotation);

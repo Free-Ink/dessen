@@ -1,0 +1,12 @@
+{
+  "name": "Dessen",
+  "version": "0.1.0",
+  "description": "Sandboxed RV32IM app runtime for e-paper firmware, with a FreeInkUI binding.",
+  "platforms": "*",
+  "frameworks": "*",
+  "build": {
+    "srcDir": ".",
+    "includeDir": ".",
+    "srcFilter": ["+<vm/dessen_vm.c>", "+<freeink/DessenFreeInk.cpp>"]
+  }
+}
