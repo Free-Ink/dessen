@@ -101,6 +101,11 @@ typedef struct {
 // text_input() flags
 #define DSN_INPUT_PASSWORD 1
 
+// Book paths contain up to a 255-byte folder, a slash and a 255-byte filename.
+#define DSN_BOOK_PATH_MAX 511
+#define DSN_SHELF_PAGE_MAX 8
+#define DSN_SHELF_RECORD_MAX (DSN_BOOK_PATH_MAX + 2 * 255 + 6)
+
 // open_home() destinations (the firmware's home-screen menu items).
 #define DSN_HOME_FILES 0
 #define DSN_HOME_LIBRARY 1

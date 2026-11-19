@@ -22,11 +22,11 @@ int main(int argc, char** argv) {
   dessen::FreeInkHost host;
   if (!host.load(mem, static_cast<uint32_t>(len), sizeof mem)) return fprintf(stderr, "not a valid dessen app\n"), 2;
   host.setRandom([]() -> uint32_t { return arc4random(); });
-  // Capability services: storage under DESSEN_FS_ROOT (cwd by default), network
+  // Capability services: storage enabled by DESSEN_FS_ROOT, network
   // from DESSEN_NET_ROOT fixtures when set, crypto via libcrypto.
   const char* fsRoot = getenv("DESSEN_FS_ROOT");
   const char* netRoot = getenv("DESSEN_NET_ROOT");
-  dessen::DesktopServices services(fsRoot ? fsRoot : ".", "/app", netRoot ? netRoot : "");
+  dessen::DesktopServices services(fsRoot ? fsRoot : "", "/app", netRoot ? netRoot : "");
   host.setServices(&services);
 
   TraceTarget target;

@@ -1,4 +1,4 @@
-// A home screen showing books from the Library, with Recents as a fallback.
+// A home screen showing recently opened books, then recently added books.
 // Tap a book or select it with Prev/Next and Confirm. Back opens Files.
 #include "dessen.h"
 #include "home_icons.h"
@@ -6,8 +6,7 @@
 #define MARGIN 24
 #define HEADER 72
 #define FOOT_H 92
-#define MAX_BOOKS 64
-#define VIS 8  // max rows that can fit on screen (cover buffers are per-slot)
+#define VIS DSN_SHELF_PAGE_MAX  // cover buffers are per visible row
 
 // Bottom nav: reach every home destination. Each cell draws its own little glyph
 // (from the drawing primitives — an app can equally bundle a bitmap and
@@ -20,7 +19,7 @@ static const char *const nav_label[NAV_N] = {"Files", "OPDS", "Plugins", "Transf
 // Row height and text-line heights are resolved from the firmware's fonts at
 // startup (main). A text box shorter than the font's line height draws nothing,
 // so these must never be hardcoded below the real font size.
-static int rowH, titleLh, authorLh;
+static int rowH, headingLh, titleLh, authorLh;
 
 struct Book {
   const char *path;
@@ -29,9 +28,10 @@ struct Book {
   int percent;
 };
 
-static char buf[8192];
-static struct Book books[MAX_BOOKS];
-static int nbooks, sel, top, perPage;  // sel = selection, top = first visible, perPage = rows shown
+// Keep the displayed strings intact if the host fails while reading the next page.
+static char pages[2][VIS * DSN_SHELF_RECORD_MAX + 1];
+static struct Book books[VIS];
+static int activePage, pageStart, pageRows, shown, sel, perPage;
 static int W, H, listTop, listBottom;
 
 // Covers: packed {u16 w, u16 h} + MSB-first 1-bit rows. Kept per visible SLOT
@@ -42,21 +42,17 @@ static int W, H, listTop, listBottom;
 #define COVER_H 92   // cover thumbnail height (the row is built around it)
 #define GUTTER 28    // side margin for the list
 static unsigned char covers[VIS][COVER_MAX];
-static int cover_n[VIS], cover_slot[VIS], coverH;
+static int cover_n[VIS], cover_slot[VIS];
 
 static int slen(const char *s);
 
-// Split a book-list blob (lines of "path\ttitle\tauthor\tpercent") in place.
-// Prefer the whole library; fall back to recent books if the index isn't built.
-static int parse(int maxBooks) {
-  int n = dsn_library(buf, sizeof buf - 1);
-  const int useRecents = n <= 0;
-  if (useRecents) n = dsn_recents(buf, sizeof buf - 1);
-  if (n < 0 || n >= (int)sizeof buf) return 0;
+// Split the returned records in place so the visible rows can refer to buf.
+static int parse(char *buf, int n) {
+  if (n < 0 || n >= (int)sizeof pages[0]) return 0;
   buf[n] = 0;
   int count = 0;
   char *p = buf;
-  while (*p && count < maxBooks) {
+  while (*p && count < perPage) {
     char *fields[4] = {p, 0, 0, 0};
     int f = 1;
     char *line_end = p;
@@ -73,20 +69,50 @@ static int parse(int maxBooks) {
       books[count].path = fields[0];
       books[count].title = fields[1];
       books[count].author = fields[2] ? fields[2] : "";
-      int percent = -1;
-      if (!useRecents) {
-        percent = dsn_book_progress(fields[0], slen(fields[0]));
-      } else if (fields[3] && *fields[3] >= '0' && *fields[3] <= '9') {
-        percent = 0;
-        for (const char *digit = fields[3]; *digit >= '0' && *digit <= '9' && percent <= 100; digit++)
-          percent = percent * 10 + *digit - '0';
-      }
+      const int percent = dsn_book_progress(fields[0], slen(fields[0]));
       books[count].percent = percent <= 100 ? percent : -1;
       count++;
     }
     p = more ? line_end + 1 : line_end;
   }
   return count;
+}
+
+static int show_page(int start, int minRows) {
+  if (start < 0) return 0;
+  const int nextPage = 1 - activePage;
+  char *buf = pages[nextPage];
+  int n = dsn_recent_shelf(start, perPage, buf, sizeof pages[0] - 1);
+  if (n < 0 && start == 0 && !pageRows) n = dsn_recents(buf, sizeof pages[0] - 1);
+  if (n <= 0 || n >= (int)sizeof pages[0]) return 0;
+  int rows = 0;
+  for (int i = 0; i < n && rows < perPage; ++i) rows += buf[i] == '\n';
+  if (rows < minRows) return 0;
+  pageRows = rows;
+  shown = parse(buf, n);
+  if (sel >= shown) sel = shown ? shown - 1 : 0;
+  activePage = nextPage;
+  for (int i = 0; i < VIS; ++i) cover_slot[i] = -1;
+  pageStart = start;
+  return 1;
+}
+
+static int next_page(void) {
+  if (pageRows < perPage) return show_page(pageStart, pageRows + 1);
+  if (!show_page(pageStart + pageRows, 1)) return 0;
+  sel = 0;
+  return 1;
+}
+
+static int put_number(char *out, int value) {
+  int n = 0, place = 1;
+  while (value / place >= 10) place *= 10;
+  for (; place > 0; place /= 10) out[n++] = '0' + value / place % 10;
+  return n;
+}
+
+static int nav_edge(int i) {
+  return i * W / NAV_N;
 }
 
 static void pct_str(char *out, int pct) {
@@ -113,29 +139,25 @@ static void draw_glyph(int idx, int cx, int cy) {
 
 static void draw(void) {
   dsn_clear();
-  // Header with a hairline rule under it, and a "page / total" hint when it scrolls.
-  dsn_text_box(GUTTER, 24, W - 2 * GUTTER - 90, titleLh + 6, "Library", 7, DSN_FONT_TITLE, DSN_ALIGN_LEFT, 1, 0);
+  const int rangeW = 128;
+  dsn_text_box(GUTTER, 24, W - 2 * GUTTER - rangeW, headingLh, "Recents", 7, DSN_FONT_TITLE, DSN_ALIGN_LEFT, 1, 0);
   dsn_line(GUTTER, HEADER - 14, W - GUTTER, HEADER - 14, 1, DSN_LIGHT_GRAY);
-  if (nbooks > perPage) {
-    char pg[16];
-    int k = 0, cur = top / perPage + 1, tot = (nbooks + perPage - 1) / perPage;
-    if (cur >= 10) pg[k++] = '0' + cur / 10;
-    pg[k++] = '0' + cur % 10;
-    pg[k++] = ' ', pg[k++] = '/', pg[k++] = ' ';
-    if (tot >= 10) pg[k++] = '0' + tot / 10;
-    pg[k++] = '0' + tot % 10;
-    dsn_text_box(W - GUTTER - 90, 24, 90, titleLh + 6, pg, k, DSN_FONT_SMALL, DSN_ALIGN_RIGHT, 1, 0);
+  if (pageRows) {
+    char range[24];
+    int n = put_number(range, pageStart + 1);
+    if (pageRows > 1) {
+      range[n++] = '-';
+      n += put_number(range + n, pageStart + pageRows);
+    }
+    dsn_text_box(W - GUTTER - rangeW, 24, rangeW, authorLh, range, n, DSN_FONT_SMALL, DSN_ALIGN_RIGHT, 1, 0);
+  } else {
+    const char *msg = "No recent books. Open a book or add books and update the Library.";
+    dsn_text_box(GUTTER, H / 2 - 40, W - 2 * GUTTER, 4 * titleLh,
+                 msg, slen(msg), DSN_FONT_BODY, DSN_ALIGN_CENTER, 4, 0);
   }
-
-  if (nbooks == 0) {
-    dsn_text_box(GUTTER, H / 2 - 40, W - 2 * GUTTER, 120,
-                 "No books yet. Add books, then open the Library once to index them.", 66, DSN_FONT_BODY,
-                 DSN_ALIGN_CENTER, 4, 0);
-  }
-  int shown = nbooks - top < perPage ? nbooks - top : perPage;
   for (int r = 0; r < shown; r++) {
-    int idx = top + r, y = listTop + r * rowH;
-    int selected = idx == sel;
+    int idx = pageStart + r, y = listTop + r * rowH;
+    int selected = r == sel;
     if (selected)  // soft rounded highlight behind the whole row
       dsn_fill_round(GUTTER - 12, y + 6, W - 2 * GUTTER + 24, rowH - 12, DSN_LIGHT_GRAY, 18, DSN_CORNERS_ALL);
 
@@ -153,21 +175,21 @@ static void draw(void) {
     int blockH = titleLh + 6 + authorLh + 18 + 10;
     int ty = cy + (COVER_H - blockH) / 2;
     if (ty < cy) ty = cy;
-    dsn_text_box(tx, ty, tw, titleLh, books[idx].title, slen(books[idx].title), DSN_FONT_BODY, DSN_ALIGN_LEFT, 1,
+    dsn_text_box(tx, ty, tw, titleLh, books[r].title, slen(books[r].title), DSN_FONT_BODY, DSN_ALIGN_LEFT, 1,
                  DSN_TEXT_BOLD);
-    dsn_text_box(tx, ty + titleLh + 6, tw, authorLh, books[idx].author, slen(books[idx].author), DSN_FONT_SMALL,
+    dsn_text_box(tx, ty + titleLh + 6, tw, authorLh, books[r].author, slen(books[r].author), DSN_FONT_SMALL,
                  DSN_ALIGN_LEFT, 1, 0);
     // Progress: a rounded track with the read portion filled, percent beside it.
     int barY = ty + titleLh + 6 + authorLh + 18, barW = tw - 70;
     if (barW > 60) {
       // the track must contrast the row: white on the gray selection, else gray
       dsn_fill_round(tx, barY, barW, 10, selected ? DSN_WHITE : DSN_LIGHT_GRAY, 5, DSN_CORNERS_ALL);
-      if (books[idx].percent > 0) {
-        int fw = barW * books[idx].percent / 100;
+      if (books[r].percent > 0) {
+        int fw = barW * books[r].percent / 100;
         dsn_fill_round(tx, barY, fw < 10 ? 10 : fw, 10, DSN_BLACK, 5, DSN_CORNERS_ALL);
       }
       char pc[8];
-      pct_str(pc, books[idx].percent);
+      pct_str(pc, books[r].percent);
       if (pc[0])
         dsn_text_box(tx + barW + 12, barY + 5 - authorLh / 2, 56, authorLh, pc, slen(pc), DSN_FONT_SMALL,
                      DSN_ALIGN_LEFT, 1, 0);
@@ -176,11 +198,12 @@ static void draw(void) {
 
   // Nav bar: one tappable cell per home destination (glyph over a label). Touch
   // devices have no Back key, so this is the only way to reach the rest.
-  int navTop = H - FOOT_H, cellW = W / NAV_N;
+  int navTop = H - FOOT_H;
   dsn_line(0, navTop, W, navTop, 1, DSN_LIGHT_GRAY);
   for (int i = 0; i < NAV_N; i++) {
-    draw_glyph(i, i * cellW + cellW / 2, navTop + 28);
-    dsn_text_box(i * cellW, navTop + 48, cellW, authorLh, nav_label[i], slen(nav_label[i]), DSN_FONT_SMALL,
+    int left = nav_edge(i), width = nav_edge(i + 1) - left;
+    draw_glyph(i, left + width / 2, navTop + 28);
+    dsn_text_box(left, navTop + 48, width, authorLh, nav_label[i], slen(nav_label[i]), DSN_FONT_SMALL,
                  DSN_ALIGN_CENTER, 1, 0);
   }
   dsn_refresh();
@@ -192,23 +215,14 @@ static int slen(const char *s) {
   return n;
 }
 
-// Clamp a scroll target and apply it, invalidating cover slots so the newly
-// visible books reload.
-static void scroll_to(int t) {
-  int maxTop = nbooks - perPage;
-  if (maxTop < 0) maxTop = 0;
-  top = t < 0 ? 0 : t > maxTop ? maxTop : t;
-}
-
 // Fetch one visible cover that isn't loaded for the book now under its slot;
 // returns 1 if it did work (caller redraws and comes back), 0 when the visible
 // window is fully covered.
 static int load_one_cover(void) {
-  int shown = nbooks - top < perPage ? nbooks - top : perPage;
   for (int r = 0; r < shown; r++) {
-    int idx = top + r;
+    int idx = pageStart + r;
     if (cover_slot[r] == idx) continue;  // already the right cover
-    int n = dsn_book_cover(books[idx].path, slen(books[idx].path), coverH, covers[r], COVER_MAX);
+    int n = dsn_book_cover(books[r].path, slen(books[r].path), COVER_H, covers[r], COVER_MAX);
     cover_n[r] = n > 4 ? n : 0;  // 0 = no cover / not supported (no PSRAM)
     cover_slot[r] = idx;
     return 1;
@@ -219,6 +233,7 @@ static int load_one_cover(void) {
 int main(void) {
   W = dsn_screen_width();
   H = dsn_screen_height();
+  headingLh = dsn_line_height(DSN_FONT_TITLE);
   titleLh = dsn_line_height(DSN_FONT_BODY);
   authorLh = dsn_line_height(DSN_FONT_SMALL);
   rowH = COVER_H + 28;  // cover height plus row padding
@@ -227,9 +242,7 @@ int main(void) {
   perPage = listBottom > listTop ? (listBottom - listTop) / rowH : 1;
   if (perPage > VIS) perPage = VIS;
   if (perPage < 1) perPage = 1;
-  nbooks = parse(MAX_BOOKS);  // load the whole library; the window scrolls
-  coverH = COVER_H;           // the firmware returns a book-aspect width at this height
-  for (int r = 0; r < VIS; r++) cover_slot[r] = -1;
+  show_page(0, 1);
   draw();
   while (load_one_cover()) draw();  // covers pop in one per redraw
 
@@ -241,42 +254,45 @@ int main(void) {
     }
     if (type == DSN_EV_TAP) {
       int x = DSN_EV_X(e), y = DSN_EV_Y(e);
-      if (y >= H - FOOT_H) {  // nav bar: open the tapped destination
-        int i = x / (W / NAV_N);
-        if (i >= 0 && i < NAV_N) dsn_open_home(nav_dest[i]);
-        return 0;
-      }
-      if (nbooks && y >= listTop && y < listBottom) {  // tap a book to open it
+      if (y >= H - FOOT_H) {
+        for (int i = 0; i < NAV_N; i++) {
+          if (x < nav_edge(i + 1)) {
+            dsn_open_home(nav_dest[i]);
+            break;
+          }
+        }
+      } else if (y >= listTop && y < listBottom) {
         int r = (y - listTop) / rowH;
-        if (r < perPage && top + r < nbooks) {
-          dsn_open_book(books[top + r].path, slen(books[top + r].path));
-          return 0;
+        if (r < shown) {
+          const char *path = books[r].path;
+          dsn_open_book(path, slen(path));
         }
       }
       continue;
     }
-    if (nbooks == 0) continue;
-    // Up/Down buttons move the selection (scrolling to keep it in view). Swipes
-    // page the list. Confirm opens the selection; a tap opens what it hit.
+    if (!pageRows) {
+      if ((type == DSN_EV_NEXT || type == DSN_EV_CONFIRM || type == DSN_EV_SWIPE_UP) && show_page(0, 1)) {
+        draw();
+        while (load_one_cover()) draw();
+      }
+      continue;
+    }
     if (type == DSN_EV_NEXT) {
-      if (sel >= nbooks - 1) continue;
-      sel++;
-      if (sel >= top + perPage) scroll_to(sel - perPage + 1);
+      if (sel + 1 < shown) sel++;
+      else if (!next_page()) continue;
     } else if (type == DSN_EV_PREV) {
-      if (sel <= 0) continue;
-      sel--;
-      if (sel < top) scroll_to(sel);
-    } else if (type == DSN_EV_SWIPE_UP) {  // content moves up -> next page
-      if (top + perPage >= nbooks) continue;
-      scroll_to(top + perPage);
-      if (sel < top) sel = top;
-    } else if (type == DSN_EV_SWIPE_DOWN) {  // -> previous page
-      if (top == 0) continue;
-      scroll_to(top - perPage);
-      if (sel >= top + perPage) sel = top + perPage - 1;
-    } else if (type == DSN_EV_CONFIRM) {
-      dsn_open_book(books[sel].path, slen(books[sel].path));
-      return 0;
+      if (sel > 0) sel--;
+      else if (show_page(pageStart - perPage, 1)) sel = shown ? shown - 1 : 0;
+      else continue;
+    } else if (type == DSN_EV_SWIPE_UP) {
+      if (!next_page()) continue;
+    } else if (type == DSN_EV_SWIPE_DOWN) {
+      if (!show_page(pageStart - perPage, 1)) continue;
+      sel = shown ? shown - 1 : 0;
+    } else if (type == DSN_EV_CONFIRM && shown) {
+      const char *path = books[sel].path;
+      dsn_open_book(path, slen(path));
+      continue;
     } else {
       continue;
     }

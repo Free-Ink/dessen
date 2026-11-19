@@ -5,6 +5,7 @@
 #pragma once
 #include <FreeInkUICore.h>
 
+#include "../sdk/dessen_abi.h"
 #include "../vm/dessen_vm.h"
 
 namespace dessen {
@@ -86,17 +87,14 @@ class FreeInkHost {
   static int onEcall(dvm_t* vm, void* self);
   uint32_t nextRandom();
 
-  void finishAsync(int code); // write a completed async result into x[10]
-
   dvm_t vm_{};
   State state_ = State::Exited;
   bool refresh_ = false;
-  bool asyncPending_ = false; // an async op is parked, poll it each tick
   uint32_t (*random_)() = nullptr;
   uint32_t fallbackSeed_ = 0x9e3779b9u;
   Services* services_ = nullptr;
   Launch launch_ = Launch::None;
-  char launchPath_[256] = {0};
+  char launchPath_[DSN_BOOK_PATH_MAX + 1] = {0};
   int launchHomeDest_ = 0;
   freeink::ui::DrawTarget* target_ = nullptr;
   freeink::ui::DeviceContext device_{};

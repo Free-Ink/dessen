@@ -38,6 +38,8 @@ uint32_t eventOf(const InputSnapshot& in, View view, FreeInkHost::Swipe swipe) {
     case FreeInkHost::SwipeRight: return DSN_EV_SWIPE_RIGHT;
     default: break;
   }
+  if (in.swipeLeft) return DSN_EV_SWIPE_LEFT;
+  if (in.swipeRight) return DSN_EV_SWIPE_RIGHT;
   if (in.prev || in.focusPrev) return DSN_EV_PREV;
   if (in.next || in.focusNext) return DSN_EV_NEXT;
   if (in.touchReleased) {  // a tap, or a press-and-hold, both with coordinates
@@ -137,7 +139,9 @@ uint32_t drawBitmap(DrawTarget& target, View screen, int32_t x, int32_t y, int32
   const Rect r = clip(x, y, w, h, screen);
   // Reject anything the target would have to guess about: unknown formats, a
   // buffer shorter than the pixels it claims, or a rect that leaves the screen.
-  if (format > DSN_BITMAP_BW || mode > DSN_BITMAP_STRETCH || rotation > 3 || bw == 0 || bh == 0 ||
+  // FreeInk's sampler stores the source dimensions in signed 16-bit fields.
+  if (r.empty() || format > DSN_BITMAP_BW || mode > DSN_BITMAP_STRETCH || rotation > 3 ||
+      bw == 0 || bh == 0 || bw > INT16_MAX || bh > INT16_MAX ||
       static_cast<uint64_t>((bw + 7) / 8) * bh > dataLen || r.width != w || r.height != h)
     return static_cast<uint32_t>(-1);
   BitmapRef ref;
@@ -160,8 +164,8 @@ Services* svc(FreeInkHost& self) { return self.services(); }
 // Copy a guest path (raw bytes) into `buf` with the storage path rules: it must
 // start with '/', hold no empty / "." / ".." component and no control bytes,
 // and fit kPathMax. Returns false (and leaves buf untouched) on any violation.
-bool guestPath(const uint8_t* p, uint32_t len, char* buf) {
-  if (!p || len == 0 || len > kPathMax || p[0] != '/') return false;
+bool guestPath(const uint8_t* p, uint32_t len, char* buf, uint32_t maxLen = kPathMax) {
+  if (!p || len == 0 || len > maxLen || p[0] != '/') return false;
   for (uint32_t i = 0; i < len; i++)
     if (p[i] < 0x20 || p[i] == 0x7f) return false;
   // No "." or ".." path component (between slashes or at the ends).
@@ -263,9 +267,18 @@ int svcFontLoad(FreeInkHost& self, const uint8_t* path, uint32_t pathLen, int si
 int svcProgress(FreeInkHost& self, const uint8_t* path, uint32_t pathLen) {
   Services* s = svc(self);
   if (!s) return DSN_ERR_UNAVAILABLE;
-  char pbuf[kPathMax + 1];
-  if (!guestPath(path, pathLen, pbuf)) return DSN_ERR_INVALID;
+  char pbuf[DSN_BOOK_PATH_MAX + 1];
+  if (!guestPath(path, pathLen, pbuf, DSN_BOOK_PATH_MAX)) return DSN_ERR_INVALID;
   return s->bookProgress(pbuf);
+}
+
+int svcBookCover(FreeInkHost& self, const uint8_t* path, uint32_t pathLen, uint32_t height,
+                 uint8_t* pixels, uint32_t cap) {
+  Services* s = svc(self);
+  if (!s) return DSN_ERR_UNAVAILABLE;
+  char pbuf[DSN_BOOK_PATH_MAX + 1];
+  if (!guestPath(path, pathLen, pbuf, DSN_BOOK_PATH_MAX)) return DSN_ERR_INVALID;
+  return s->bookCover(pbuf, height, pixels, cap);
 }
 
 } // namespace
@@ -288,18 +301,13 @@ void FreeInkHost::randomBytesInto(uint8_t* out, uint32_t n) {
   for (uint32_t i = 0; i < n; i++) out[i] = static_cast<uint8_t>(nextRandom());
 }
 
-void FreeInkHost::finishAsync(int code) {
-  vm_.x[10] = static_cast<uint32_t>(code);
-  asyncPending_ = false;
-}
-
 State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const InputSnapshot& input, Swipe swipe,
                         uint32_t budget) {
   if (state_ == State::Exited || state_ == State::Faulted) return state_;
   if (state_ == State::Busy) {
     const int code = services_ ? services_->poll() : DSN_ERR_IO;
     if (code == kPending) return state_; // still working; try again next tick
-    finishAsync(code);                   // result ready: resume the VM below
+    vm_.x[10] = static_cast<uint32_t>(code); // result ready: resume the VM below
   } else if (state_ == State::Waiting) {
     const uint32_t ev = eventOf(input, viewOf(device), swipe);
     if (!ev) return state_;
@@ -326,13 +334,11 @@ int FreeInkHost::requestLaunch(int kind, const uint8_t* path, uint32_t pathLen) 
     return 0;
   }
   if (launch_ == Launch::Reader) {
-    if (!path || pathLen == 0 || pathLen >= sizeof launchPath_) {
+    if (!guestPath(path, pathLen, launchPath_, DSN_BOOK_PATH_MAX)) {
       launch_ = Launch::None;
       vm_.x[10] = static_cast<uint32_t>(DSN_ERR_INVALID);
       return 0;
     }
-    memcpy(launchPath_, path, pathLen);
-    launchPath_[pathLen] = '\0';
   }
   return kLaunch;
 }
@@ -361,7 +367,7 @@ int FreeInkHost::beginNet(const uint8_t* head, uint32_t headLen, const uint8_t* 
   memcpy(hbuf, head, headLen);
   hbuf[headLen] = '\0';
   const int code = services_->netStart(hbuf, body, bodyLen, resp, respCap);
-  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;
 }
@@ -374,7 +380,7 @@ int FreeInkHost::beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* 
   memcpy(ubuf, url, urlLen);
   ubuf[urlLen] = '\0';
   const int code = services_->fetchStart(ubuf, dbuf);
-  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;
 }
@@ -382,7 +388,7 @@ int FreeInkHost::beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* 
 int FreeInkHost::beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, int flags) {
   if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
   const int code = services_->textInputStart(prompt, flags, reinterpret_cast<char*>(out), cap);
-  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;
 }
@@ -390,7 +396,7 @@ int FreeInkHost::beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, 
 int FreeInkHost::beginWifi() {
   if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
   const int code = services_->wifiConnectStart();
-  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;
 }
@@ -399,7 +405,7 @@ int FreeInkHost::beginKeygen(uint32_t bits, uint8_t* pub, uint32_t pubCap, uint8
   if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
   if (bits != 1024 && bits != 2048) { vm_.x[10] = u(DSN_ERR_INVALID); return 0; }
   const int code = services_->keygenStart(bits, pub, pubCap, priv, privCap);
-  if (code == kPending) { asyncPending_ = true; return kBusy; }
+  if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;
 }

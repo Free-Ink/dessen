@@ -1,15 +1,22 @@
 #include "DesktopServices.h"
 
 #include <dirent.h>
+#include <fcntl.h>
 #include <openssl/evp.h>
 #include <openssl/pkcs12.h>
 #include <openssl/rand.h>
 #include <openssl/x509.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
+#include <algorithm>
+#include <cerrno>
+#include <climits>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "../sdk/dessen_abi.h"
@@ -20,8 +27,104 @@ namespace {
 // A completed crypto result goes into the app buffer with this guard.
 int give(const uint8_t* src, size_t n, uint8_t* out, uint32_t cap) {
   if (n > cap) return DSN_ERR_TOO_BIG;
-  memcpy(out, src, n);
+  if (n) memcpy(out, src, n);
   return static_cast<int>(n);
+}
+
+struct Fd {
+  int value;
+  ~Fd() { if (value >= 0) close(value); }
+};
+
+// Walk relative to open directories so a symlink cannot redirect a guest path.
+int openParent(const std::string& root, std::string_view path, std::string& leaf) {
+  if (root.empty() || path.empty() || path.front() != '/') return -1;
+  path.remove_prefix(1);
+  if (!path.empty() && path.back() == '/') path.remove_suffix(1);
+  if (path.empty()) leaf = ".";
+  Fd dir{open(root.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
+  if (dir.value < 0) return -1;
+  while (!path.empty()) {
+    const auto slash = path.find('/');
+    const auto part = path.substr(0, slash);
+    if (part.empty() || part == "." || part == "..") return -1;
+    if (slash == std::string_view::npos) {
+      leaf = part;
+      break;
+    }
+    const int next = openat(dir.value, std::string(part).c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (next < 0) return -1;
+    close(dir.value);
+    dir.value = next;
+    path.remove_prefix(slash + 1);
+  }
+  const int result = dir.value;
+  dir.value = -1;
+  return result;
+}
+
+FILE* openRegular(int parent, const char* leaf) {
+  const int fd = openat(parent, leaf, O_RDONLY | O_NONBLOCK | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) return nullptr;
+  struct stat st;
+  if (fstat(fd, &st) == 0 && S_ISREG(st.st_mode)) {
+    if (FILE* file = fdopen(fd, "rb")) return file;
+  }
+  close(fd);
+  return nullptr;
+}
+
+int readBounded(FILE* file, std::vector<uint8_t>& data, uint32_t cap) {
+  data.resize(static_cast<size_t>(cap) + 1);
+  const size_t n = fread(data.data(), 1, data.size(), file);
+  const bool readOk = !ferror(file);
+  const bool closeOk = fclose(file) == 0;
+  if (!readOk || !closeOk) return DSN_ERR_IO;
+  if (n > cap) return DSN_ERR_TOO_BIG;
+  data.resize(n);
+  return static_cast<int>(n);
+}
+
+template <typename Write>
+int replaceFile(const std::string& root, const char* path, Write write) {
+  std::string leaf;
+  const Fd dir{openParent(root, path, leaf)};
+  if (dir.value < 0 || leaf == "." || path[strlen(path) - 1] == '/') return DSN_ERR_IO;
+  struct stat st;
+  if (fstatat(dir.value, leaf.c_str(), &st, AT_SYMLINK_NOFOLLOW) == 0) {
+    if (!S_ISREG(st.st_mode)) return DSN_ERR_IO;
+  } else if (errno != ENOENT) {
+    return DSN_ERR_IO;
+  }
+
+  char temp[32];
+  int fd;
+  do {
+    uint64_t id;
+    if (RAND_bytes(reinterpret_cast<uint8_t*>(&id), sizeof id) != 1) return DSN_ERR_IO;
+    snprintf(temp, sizeof temp, ".dessen-%016llx", static_cast<unsigned long long>(id));
+    fd = openat(dir.value, temp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+  } while (fd < 0 && errno == EEXIST);
+  if (fd < 0) return DSN_ERR_IO;
+
+  FILE* file = fdopen(fd, "wb");
+  if (file) {
+    const int result = write(file);
+    const bool flushed = result >= 0 && fflush(file) == 0 && fsync(fd) == 0;
+    const bool closeOk = fclose(file) == 0;
+    if (flushed && closeOk && renameat(dir.value, temp, dir.value, leaf.c_str()) == 0) return result;
+  } else {
+    close(fd);
+  }
+  unlinkat(dir.value, temp, 0);
+  return DSN_ERR_IO;
+}
+
+std::string fixturePath(std::string_view url) {
+  const auto scheme = url.find("://");
+  if (scheme != std::string_view::npos) url.remove_prefix(scheme + 3);
+  if (url.empty() || url.front() == '/' || url.back() == '/') return {};
+  return "/" + std::string(url);
 }
 
 struct Evp {
@@ -91,46 +194,71 @@ int DesktopServices::deviceId(char* out, uint32_t cap) {
 }
 
 // ---- storage ----
-std::string DesktopServices::resolve(const char* path) const { return fsRoot_ + path; }
-
 int DesktopServices::fsRead(const char* path, uint8_t* out, uint32_t cap) {
-  FILE* f = fopen(resolve(path).c_str(), "rb");
-  if (!f) return DSN_ERR_IO;
-  std::vector<uint8_t> buf;
-  uint8_t chunk[4096];
-  size_t r;
-  while ((r = fread(chunk, 1, sizeof chunk, f)) > 0) buf.insert(buf.end(), chunk, chunk + r);
-  fclose(f);
-  return give(buf.data(), buf.size(), out, cap);
+  if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
+  if (!*path || path[strlen(path) - 1] == '/') return DSN_ERR_IO;
+  std::string leaf;
+  const Fd dir{openParent(fsRoot_, path, leaf)};
+  if (dir.value < 0) return DSN_ERR_IO;
+  FILE* file = openRegular(dir.value, leaf.c_str());
+  if (!file) return DSN_ERR_IO;
+  std::vector<uint8_t> data;
+  const int result = readBounded(file, data, cap);
+  return result < 0 ? result : give(data.data(), data.size(), out, cap);
 }
 
 int DesktopServices::fsWrite(const char* path, const uint8_t* data, uint32_t n) {
-  const std::string full = resolve(path), tmp = full + ".tmp";
-  FILE* f = fopen(tmp.c_str(), "wb");
-  if (!f) return DSN_ERR_IO;
-  const bool ok = fwrite(data, 1, n, f) == n;
-  fclose(f);
-  if (!ok || rename(tmp.c_str(), full.c_str()) != 0) { remove(tmp.c_str()); return DSN_ERR_IO; }
-  return 0;
+  if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
+  return replaceFile(fsRoot_, path, [&](FILE* file) {
+    return fwrite(data, 1, n, file) == n ? 0 : DSN_ERR_IO;
+  });
 }
 
 int DesktopServices::fsList(const char* path, char* out, uint32_t cap) {
-  DIR* d = opendir(resolve(path).c_str());
-  if (!d) return DSN_ERR_IO;
-  std::string acc;
-  for (dirent* e; (e = readdir(d));) {
-    if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
-    acc += e->d_name;
-    if (e->d_type == DT_DIR) acc += '/';
-    acc += '\n';
+  if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
+  std::string leaf;
+  const Fd parent{openParent(fsRoot_, path, leaf)};
+  if (parent.value < 0) return DSN_ERR_IO;
+  const int fd = openat(parent.value, leaf.c_str(), O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+  if (fd < 0) return DSN_ERR_IO;
+  DIR* dir = fdopendir(fd);
+  if (!dir) { close(fd); return DSN_ERR_IO; }
+
+  std::string entries;
+  int result = 0;
+  for (;;) {
+    errno = 0;
+    const dirent* entry = readdir(dir);
+    if (!entry) {
+      if (errno) result = DSN_ERR_IO;
+      break;
+    }
+    if (!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, "..")) continue;
+    entries += entry->d_name;
+    if (entry->d_type == DT_DIR) entries += '/';
+    entries += '\n';
+    if (entries.size() > cap) { result = DSN_ERR_TOO_BIG; break; }
   }
-  closedir(d);
-  return give(reinterpret_cast<const uint8_t*>(acc.data()), acc.size(), reinterpret_cast<uint8_t*>(out), cap);
+  if (closedir(dir) != 0) return DSN_ERR_IO;
+  return result < 0 ? result : give(reinterpret_cast<const uint8_t*>(entries.data()), entries.size(),
+                                    reinterpret_cast<uint8_t*>(out), cap);
 }
 
-int DesktopServices::fsDelete(const char* path) { return remove(resolve(path).c_str()) == 0 ? 0 : DSN_ERR_IO; }
+int DesktopServices::fsDelete(const char* path) {
+  if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
+  std::string leaf;
+  const Fd dir{openParent(fsRoot_, path, leaf)};
+  if (dir.value < 0 || leaf == ".") return DSN_ERR_IO;
+  if (path[strlen(path) - 1] != '/') {
+    if (unlinkat(dir.value, leaf.c_str(), 0) == 0) return 0;
+    if (errno != EISDIR && errno != EPERM) return DSN_ERR_IO;
+  }
+  if (unlinkat(dir.value, leaf.c_str(), AT_REMOVEDIR) == 0) return 0;
+  return DSN_ERR_IO;
+}
 
 int DesktopServices::fsAppDir(char* out, uint32_t cap) {
+  if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
   if (appDir_.size() + 1 > cap) return DSN_ERR_TOO_BIG;
   memcpy(out, appDir_.c_str(), appDir_.size() + 1);
   return static_cast<int>(appDir_.size());
@@ -145,12 +273,36 @@ int DesktopServices::recents(char* out, uint32_t cap) {
               reinterpret_cast<uint8_t*>(out), cap);
 }
 
-int DesktopServices::library(char* out, uint32_t cap) {
-  if (cap == 0) return 0;
-  const size_t end = libraryFixture.rfind('\n', cap - 1);
-  if (end == std::string::npos) return 0;
-  memcpy(out, libraryFixture.data(), end + 1);
-  return static_cast<int>(end + 1);
+int DesktopServices::recentShelf(uint32_t first, uint32_t count, char* out, uint32_t cap) {
+  if (count > DSN_SHELF_PAGE_MAX) return DSN_ERR_INVALID;
+  uint32_t used = 0;
+  std::vector<std::string_view> opened;
+  for (const auto* fixture : {&recentsFixture, &addedFixture}) {
+    std::string_view remaining = *fixture;
+    while (count) {
+      const size_t end = remaining.find('\n');
+      if (end == std::string_view::npos) break;
+      const auto row = remaining.substr(0, end + 1);
+      remaining.remove_prefix(row.size());
+      const auto path = row.substr(0, row.find('\t'));
+      if (fixture == &recentsFixture) opened.push_back(path);
+      else if (std::find(opened.begin(), opened.end(), path) != opened.end()) continue;
+      if (first) { --first; continue; }
+      const auto lastTab = row.rfind('\t');
+      const auto prefix = row.substr(0, lastTab);
+      constexpr std::string_view progress = "\t-1\n";
+      const auto suffix = lastTab == std::string_view::npos ? std::string_view{} : progress;
+      if (prefix.size() + suffix.size() > cap - used) return used ? static_cast<int>(used) : DSN_ERR_TOO_BIG;
+      memcpy(out + used, prefix.data(), prefix.size());
+      used += prefix.size();
+      if (!suffix.empty()) {
+        memcpy(out + used, suffix.data(), suffix.size());
+        used += suffix.size();
+      }
+      --count;
+    }
+  }
+  return static_cast<int>(used);
 }
 
 int DesktopServices::fontLoad(const char* path, int size) {
@@ -344,53 +496,57 @@ int DesktopServices::wifiConnectStart() { return 0; }  // desktop is always onli
 int DesktopServices::netStart(const char* head, const uint8_t*, uint32_t, uint8_t* resp, uint32_t cap) {
   // Fixture: first line "METHOD url"; map to <netRoot>/<host><path> + .status.
   if (netRoot_.empty()) return DSN_ERR_UNAVAILABLE;
-  std::string line(head);
-  const size_t nl = line.find('\n');
-  if (nl != std::string::npos) line = line.substr(0, nl);
+  std::string_view line(head);
+  line = line.substr(0, line.find('\n'));
   const size_t sp = line.find(' ');
-  if (sp == std::string::npos) return DSN_ERR_INVALID;
-  std::string url = line.substr(sp + 1);
-  const size_t scheme = url.find("://");
-  if (scheme != std::string::npos) url = url.substr(scheme + 3);
-  const std::string base = netRoot_ + "/" + url;
-  FILE* bf = fopen(base.c_str(), "rb");
-  if (!bf) return DSN_ERR_IO;
+  if (sp == std::string_view::npos) return DSN_ERR_INVALID;
+  std::string leaf;
+  const Fd dir{openParent(netRoot_, fixturePath(line.substr(sp + 1)), leaf)};
+  if (dir.value < 0) return DSN_ERR_IO;
+  if (cap < 4) return DSN_ERR_TOO_BIG;
+  FILE* file = openRegular(dir.value, leaf.c_str());
+  if (!file) return DSN_ERR_IO;
   std::vector<uint8_t> body;
-  uint8_t ch[4096];
-  size_t r;
-  while ((r = fread(ch, 1, sizeof ch, bf)) > 0) body.insert(body.end(), ch, ch + r);
-  fclose(bf);
+  const int result = readBounded(file, body, cap - 4);
+  if (result < 0) return result;
+
   uint16_t status = 200;
-  if (FILE* sf = fopen((base + ".status").c_str(), "r")) {
-    int s;
-    if (fscanf(sf, "%d", &s) == 1) status = static_cast<uint16_t>(s);
+  if (FILE* sf = openRegular(dir.value, (leaf + ".status").c_str())) {
+    unsigned code;
+    if (fscanf(sf, "%3u", &code) == 1 && code >= 100 && code <= 599) status = static_cast<uint16_t>(code);
     fclose(sf);
   }
-  // resp layout: u16 status (BE), u16 hdrlen (BE, 0 here), body.
-  if (4 + body.size() > cap) return DSN_ERR_TOO_BIG;
+  // u16 status (BE), u16 header length (zero), then the body.
   resp[0] = status >> 8;
   resp[1] = status & 0xff;
   resp[2] = 0;
   resp[3] = 0;
-  memcpy(resp + 4, body.data(), body.size());
-  return static_cast<int>(body.size());
+  return give(body.data(), body.size(), resp + 4, cap - 4);
 }
 
 int DesktopServices::fetchStart(const char* url, const char* dest) {
-  if (netRoot_.empty()) return DSN_ERR_UNAVAILABLE;
-  std::string u(url);
-  const size_t scheme = u.find("://");
-  if (scheme != std::string::npos) u = u.substr(scheme + 3);
-  FILE* in = fopen((netRoot_ + "/" + u).c_str(), "rb");
-  if (!in) return DSN_ERR_IO;
-  FILE* out = fopen(resolve(dest).c_str(), "wb");
-  if (!out) { fclose(in); return DSN_ERR_IO; }
-  uint8_t ch[4096];
-  size_t r, total = 0;
-  while ((r = fread(ch, 1, sizeof ch, in)) > 0) { fwrite(ch, 1, r, out); total += r; }
-  fclose(in);
-  fclose(out);
-  return static_cast<int>(total);
+  if (netRoot_.empty() || fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
+  std::string leaf;
+  const Fd dir{openParent(netRoot_, fixturePath(url), leaf)};
+  if (dir.value < 0) return DSN_ERR_IO;
+  FILE* input = openRegular(dir.value, leaf.c_str());
+  if (!input) return DSN_ERR_IO;
+  const int result = replaceFile(fsRoot_, dest, [&](FILE* output) {
+    uint8_t chunk[4096];
+    size_t count;
+    int total = 0;
+    while ((count = fread(chunk, 1, sizeof chunk, input)) > 0) {
+      if (count > static_cast<size_t>(INT_MAX - total) || fwrite(chunk, 1, count, output) != count)
+        return DSN_ERR_IO;
+      total += static_cast<int>(count);
+    }
+    const bool readOk = !ferror(input);
+    const bool closeOk = fclose(input) == 0;
+    input = nullptr;
+    return readOk && closeOk ? total : DSN_ERR_IO;
+  });
+  if (input) fclose(input);
+  return result;
 }
 
 int DesktopServices::textInputStart(const char*, int, char* out, uint32_t cap) {

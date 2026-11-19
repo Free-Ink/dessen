@@ -88,9 +88,9 @@
 97 open_settings() -> i32          : return self.requestLaunch(2, 0, 0);
 98 open_browser() -> i32           : return self.requestLaunch(3, 0, 0);
 99 recents(out list) -> i32        : result = self.services() ? self.services()->recents(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
-104 library(out list) -> i32        : result = self.services() ? self.services()->library(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
+104 recent_shelf(u32 first, u16 count, out list) -> i32 : if (count > DSN_SHELF_PAGE_MAX) result = DSN_ERR_INVALID; else if (self.services()) result = self.services()->recentShelf(first, count, reinterpret_cast<char*>(list), list_len); else result = DSN_ERR_UNAVAILABLE;
 100 book_progress(buf path) -> i32 : result = svcProgress(self, path, path_len);
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 102 font_load(buf path, u16 size) -> i32 : result = svcFontLoad(self, path, path_len, (int)size);
 103 wifi_connect() -> i32 : return self.beginWifi();
-105 book_cover(str path, u16 height, out pixels) -> i32 : result = self.services() ? self.services()->bookCover(path, (uint32_t)height, pixels, pixels_len) : DSN_ERR_UNAVAILABLE;
+105 book_cover(buf path, u16 height, out pixels) -> i32 : result = svcBookCover(self, path, path_len, height, pixels, pixels_len);

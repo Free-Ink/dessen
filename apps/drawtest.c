@@ -31,6 +31,11 @@ int main(void) {
   CHECK(8, dsn_bitmap(w - 4, 10, 8, 8, smiley, 8, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == -1);    // leaves the screen
   CHECK(9, dsn_bitmap(200, 10, 8, 8, smiley, 8, 8, 8, 9, 0, DSN_BLACK, 0) == -1);                    // unknown format
 
+  static unsigned char large[32768];
+  CHECK(12, dsn_bitmap(200, 10, 8, 8, large, sizeof large, 32768, 1, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
+  CHECK(13, dsn_bitmap(200, 10, 8, 8, large, sizeof large, 1, 32768, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
+  CHECK(14, dsn_bitmap(200, 10, 0, 0, smiley, sizeof smiley, 8, 8, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
+
   dsn_refresh();
   return 0;
 }

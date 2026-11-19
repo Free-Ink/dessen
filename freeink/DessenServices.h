@@ -39,11 +39,11 @@ class Services {
   // ---- launcher / home ----  for an app set as the device's home screen
   // Recent books, newline-separated records of "path\ttitle\tauthor\tpercent".
   virtual int recents(char*, uint32_t) { return -4; }
-  // Title-sorted index records in recents() format, with percent set to -1.
-  // Returns only complete records that fit, or zero if the index is absent.
-  // CrossPoint collapses entries with identical title and author.
-  // Call bookProgress() for the books you display.
-  virtual int library(char*, uint32_t) { return -4; }
+  // A window of up to DSN_SHELF_PAGE_MAX rows, recently opened first, then
+  // recently added. The same path never appears in both groups. Uses recents()
+  // format with percent set to -1, or a blank line for an unreadable row.
+  // Returns bytes of complete lines, zero past the end, or DSN_ERR_*.
+  virtual int recentShelf(uint32_t, uint32_t, char*, uint32_t) { return -4; }
   // Saved reading progress for a book: 0-100, or -1 if none.
   virtual int bookProgress(const char*) { return -1; }
   // A book's cover as a 1-bit bitmap scaled to `height`: writes {u16 w, u16 h}

@@ -1,5 +1,5 @@
 {
-  "title": "Library",
-  "description": "A recent-books home screen",
+  "title": "Recents",
+  "description": "Recently opened and recently added books",
   "home": true
 }

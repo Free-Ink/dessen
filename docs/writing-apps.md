@@ -51,7 +51,8 @@ Create `apps/clock.c`:
 int main(void) {
   int w = dsn_screen_width(), h = dsn_screen_height();
   dsn_clear();
-  dsn_text_box(0, h / 2 - 20, w, 40, "Hello", 5, DSN_FONT_TITLE, DSN_ALIGN_CENTER, 1, 0);
+  int lh = dsn_line_height(DSN_FONT_TITLE);
+  dsn_text_box(0, (h - lh) / 2, w, lh, "Hello", 5, DSN_FONT_TITLE, DSN_ALIGN_CENTER, 1, 0);
   dsn_refresh();              // show it on the panel
   return dsn_wait_event();    // sleep until a button/tap, then exit
 }
@@ -66,8 +67,12 @@ build/dessen build/clock.bin  # run it on the desktop
 ```
 
 The desktop runner prints each drawing call and reads a key from stdin as an
-event: `c` confirm, `b` back, `p` prev, `n` next, any other key is passed
-through. That is your fast edit-run loop — no device needed.
+event: `c` confirm, `b` back, `p` prev, `n` next. The desktop runner enables file
+access when you set `DESSEN_FS_ROOT` to the directory the app may use. Set
+`DESSEN_NET_ROOT` to enable local HTTP fixtures. A request for
+`https://example.test/hello` reads `example.test/hello` inside that root. An
+optional `hello.status` file supplies the HTTP status. Fetching to a file
+requires both roots. Choose directories that contain only data intended for the app.
 
 ## The shape of every app
 
@@ -153,6 +158,12 @@ surface:
 | `dsn_measure_text(s,len,font,flags) -> u32` | `width<<16 \| height` before drawing |
 | `dsn_line_height(font) -> px` | Line height of a font |
 | `dsn_bitmap(x,y,w,h,data,len,bw,bh,format,mode,color,rotation)` -> 0/-1 | 1-bit image |
+| `dsn_recent_shelf(first,count,list,len)` -> bytes or error | Recently opened books first, then recently added books. Use a zero-based `first` and a `count` up to `DSN_SHELF_PAGE_MAX`. Each row is `path<TAB>title<TAB>author<TAB>-1<LF>` or a blank line for an unreadable entry. Zero means end of shelf. |
+
+Advance `first` by the number of lines you received, including blank lines.
+Allow `DSN_SHELF_RECORD_MAX` bytes per requested row to fit a full page. Use
+`dsn_book_progress()` for the reading progress of visible books. Rebuild the
+firmware and app binaries together when migrating to the recent shelf call.
 
 Colors: `DSN_WHITE / DSN_BLACK / DSN_LIGHT_GRAY / DSN_DARK_GRAY`.
 Fonts: `DSN_FONT_SMALL / _BODY / _TITLE`. Text flags: `DSN_TEXT_BOLD / _INVERTED`.
@@ -227,6 +238,12 @@ in the menu). Copy the folder into `/plugins/` on the reader's SD card, then:
 1. **Settings → Connectivity → Plugins** (enable).
 2. **Home → Plugins → <your app>**.
 
+To use the bundled `home` app as your launcher, open the built-in Library
+to create or refresh its index. Then choose **Recents** under
+**Settings → Display → Home Launcher**. Home shows recently opened books first and fills out the shelf
+with recently added books from the Library. A book already shown as opened
+appears once. Without an index, Home still shows recently opened books.
+
 The firmware launches any plugin folder that contains an `app.bin`. Holding
 **Back** quits back to the menu.
 
@@ -243,6 +260,4 @@ shape, frontlight, a file read), you add **one line** to
 [`abi/freeink.api`](../abi/freeink.api) and run `python3 tools/gen_api.py`. That
 regenerates both the app-side wrapper and the firmware-side dispatch. See
 `AGENTS.md` for the recipe and the rules every new call must follow (clip, pin,
-bounds-check — every app value is untrusted). Network and file access need a
-"call in progress" mechanism that does not exist yet; ask before reaching for
-those.
+bounds-check — every app value is untrusted).

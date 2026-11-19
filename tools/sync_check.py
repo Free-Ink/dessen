@@ -95,6 +95,7 @@ def main():
     sha = git_sha(sdk)
     last = PIN.read_text().strip() if PIN.exists() else None
     if sha and last and sha != last:
+        drift = True
         print(f"SDK moved since last sync: {last[:10]} -> {sha[:10]}. "
               f"Review new surface above, then `make sync-accept` to record it.")
     elif sha and not last:

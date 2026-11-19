@@ -14,11 +14,11 @@ struct TraceTarget final : freeink::ui::DrawTarget {
 
   std::vector<std::string> ops;
   int lines = 0;
-  bool echo = false; // also print each op as it happens
+  bool echo = false;
 
   void add(const std::string& op) {
     if (echo) puts(op.c_str());
-    ops.push_back(op);
+    else ops.push_back(op);
   }
   static std::string at(Rect r) {
     return std::to_string(r.x) + "," + std::to_string(r.y) + " " + std::to_string(r.width) + "x" + std::to_string(r.height);

@@ -31,6 +31,10 @@ all: build/dessen build/test_freeink $(APPS:%=build/%.bin)
 # The whole call list, both sides, comes from one description file.
 sdk/dessen_calls.h: abi/freeink.api tools/gen_api.py
 	python3 tools/gen_api.py
+ifneq ($(filter-out $(wildcard $(GEN)),$(GEN)),)
+.PHONY: missing-generated
+sdk/dessen_calls.h: missing-generated
+endif
 sdk/dessen_sysnums.h freeink/dessen_dispatch.inc: sdk/dessen_calls.h
 
 build/dessen_vm.o: vm/dessen_vm.c vm/dessen_vm.h sdk/dessen_abi.h $(GEN)
@@ -42,6 +46,8 @@ build/dessen: host/main.cpp build/dessen_vm.o $(BINDING)
 
 build/test_freeink: freeink/test_host.cpp build/dessen_vm.o $(BINDING)
 	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
+
+build/home.bin: apps/home_icons.h
 
 build/%.bin: apps/%.c sdk/crt0.S sdk/rt.c sdk/app.ld sdk/dessen.h sdk/dessen_abi.h $(GEN)
 	@mkdir -p build
@@ -59,7 +65,8 @@ test: all
 	printf cb | build/dessen build/dice.bin | grep -q 'Last:  d20='
 	printf b | build/dessen build/sudoku.bin | grep -q 'cells left'
 	printf c | build/dessen build/home.bin | grep -q 'launch reader /books/dune.epub'
-	printf nc | build/dessen build/home.bin | grep -q 'launch reader /books/neuromancer.epub'
+	printf nc | build/dessen build/home.bin | grep -q 'launch reader /books/hyperion.epub'
+	printf nnc | build/dessen build/home.bin | grep -q 'launch reader /books/neuromancer.epub'
 	build/dessen build/home.bin </dev/null | grep -q '37%'
 	@tmp=$$(mktemp -d); DESSEN_FS_ROOT=$$tmp build/dessen build/captest.bin; rc=$$?; rm -rf $$tmp; test $$rc -eq 0 && echo 'captest: PASS'
 	@nr=$$(mktemp -d); fs=$$(mktemp -d); mkdir -p $$nr/example.test; \
@@ -68,7 +75,7 @@ test: all
 	  printf 'the book bytes here' > $$nr/example.test/book.bin; \
 	  DESSEN_NET_ROOT=$$nr DESSEN_FS_ROOT=$$fs build/dessen build/nettest.bin; rc=$$?; \
 	  rm -rf $$nr $$fs; test $$rc -eq 0 && echo 'nettest: PASS'
-	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin
+	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/home.bin
 	@echo PASS
 
 # Plugin folders ready to copy into /plugins on the SD card.
@@ -87,7 +94,7 @@ sync-accept:
 	@echo "pinned $(FREEINK_SDK) @ $$(cat abi/.freeink-sync | cut -c1-10)"
 
 # Flash cost of the interpreter on an ESP32-C3, per crosspoint's size rule.
-size:
+size: $(GEN)
 	@mkdir -p build
 	$(RISCV)gcc -march=rv32imc_zicsr_zifencei -mabi=ilp32 -Os -Ivm -Isdk -c vm/dessen_vm.c -o build/dessen_vm.c3.o
 	$(RISCV)g++ -std=gnu++2a -march=rv32imc_zicsr_zifencei -mabi=ilp32 -Os -ffunction-sections -fdata-sections -fno-exceptions -fno-rtti \

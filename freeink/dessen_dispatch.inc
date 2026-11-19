@@ -564,14 +564,16 @@ case 99: { // recents
   a[0] = result;
   break;
 }
-case 104: { // library
-  const uint32_t list_len = a[1];
-  uint8_t* list = static_cast<uint8_t*>(dvm_ptr(vm, a[0], list_len));
+case 104: { // recent_shelf
+  const uint32_t first = static_cast<uint32_t>(a[0]); (void)first;
+  const uint32_t count = static_cast<uint16_t>(a[1] >> 0); (void)count;
+  const uint32_t list_len = a[3];
+  uint8_t* list = static_cast<uint8_t*>(dvm_ptr(vm, a[2], list_len));
   (void)list_len;
-  const uint32_t list_addr = a[0]; (void)list_addr;
+  const uint32_t list_addr = a[2]; (void)list_addr;
   if (!list) { a[0] = static_cast<uint32_t>(-1); break; }
   uint32_t result = 0;
-  result = self.services() ? self.services()->library(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
+  if (count > DSN_SHELF_PAGE_MAX) result = DSN_ERR_INVALID; else if (self.services()) result = self.services()->recentShelf(first, count, reinterpret_cast<char*>(list), list_len); else result = DSN_ERR_UNAVAILABLE;
   a[0] = result;
   break;
 }
@@ -610,8 +612,9 @@ case 103: { // wifi_connect
   break;
 }
 case 105: { // book_cover
-  char path_buf[kStrMax + 1];
-  const char* path = guestStr(vm, a[0], a[1], path_buf);
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
   if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
   const uint32_t height = static_cast<uint16_t>(a[2] >> 0); (void)height;
   const uint32_t pixels_len = a[4];
@@ -620,7 +623,7 @@ case 105: { // book_cover
   const uint32_t pixels_addr = a[3]; (void)pixels_addr;
   if (!pixels) { a[0] = static_cast<uint32_t>(-1); break; }
   uint32_t result = 0;
-  result = self.services() ? self.services()->bookCover(path, (uint32_t)height, pixels, pixels_len) : DSN_ERR_UNAVAILABLE;
+  result = svcBookCover(self, path, path_len, height, pixels, pixels_len);
   a[0] = result;
   break;
 }

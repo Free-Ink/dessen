@@ -29,7 +29,7 @@ class DesktopServices : public Services {
   int keystore(const char* path, const uint8_t* key, uint32_t n, uint32_t expires) override;
   // launcher/home
   int recents(char* out, uint32_t cap) override;
-  int library(char* out, uint32_t cap) override;
+  int recentShelf(uint32_t first, uint32_t count, char* out, uint32_t cap) override;
   int bookCover(const char*, uint32_t, uint8_t*, uint32_t) override { return 0; }  // desktop has no covers
   int bookProgress(const char* path) override;
   int fontLoad(const char* path, int size) override;
@@ -66,12 +66,11 @@ class DesktopServices : public Services {
   // Recent-books fixture: records of "path\ttitle\tauthor\tpercent", newline-separated.
   std::string recentsFixture =
       "/books/dune.epub\tDune\tFrank Herbert\t37\n/books/hyperion.epub\tHyperion\tDan Simmons\t5\n";
-  // Full-library fixture (same record format); the desktop has no real index.
-  std::string libraryFixture =
+  // Recently added books in newest-first order.
+  std::string addedFixture =
       "/books/dune.epub\tDune\tFrank Herbert\t-1\n/books/neuromancer.epub\tNeuromancer\tWilliam Gibson\t-1\n";
 
  private:
-  std::string resolve(const char* path) const;
   std::string fsRoot_, appDir_, netRoot_;
 };
 

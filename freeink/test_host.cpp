@@ -1,8 +1,13 @@
 // Host check for the FreeInk binding: runs real app binaries against a
-// recording DrawTarget. Usage: test_host hello oob lightsout dice sudoku drawtest asynctest (.bin)
+// recording DrawTarget. Usage: test_host hello oob lightsout dice sudoku drawtest asynctest home (.bin)
 #include <cassert>
+#include <csignal>
+#include <cstdlib>
 #include <cstdio>
+#include <filesystem>
 #include <string>
+#include <sys/resource.h>
+#include <unistd.h>
 #include <vector>
 
 #include <openssl/evp.h>
@@ -123,8 +128,161 @@ static uint32_t readApp(const char* path) {
   return static_cast<uint32_t>(n);
 }
 
+static void testDesktopStorage() {
+  namespace fs = std::filesystem;
+  std::string prefix = (fs::temp_directory_path() / "dessen-storage-XXXXXX").string();
+  assert(mkdtemp(prefix.data()));
+  const fs::path base = prefix, storage = base / "storage", fixtures = base / "fixtures";
+  fs::create_directory(storage);
+  fs::create_directories(fixtures / "example.test");
+  fs::create_directory_symlink(fixtures, storage / "redirect");
+  fs::create_symlink(fixtures / "example.test" / "book", storage / "link");
+
+  dessen::DesktopServices service(storage.string(), "/app", fixtures.string());
+  dessen::DesktopServices fixtureWriter(fixtures.string());
+  const uint8_t original[] = {1, 2, 3};
+  const uint8_t replacement[128] = {};
+  uint8_t output[sizeof replacement];
+  assert(service.fsWrite("/saved", original, sizeof original) == 0);
+  assert(fixtureWriter.fsWrite("/example.test/book", replacement, sizeof replacement) == 0);
+  assert(service.fsRead("/link", output, sizeof output) == DSN_ERR_IO);
+  assert(service.fsWrite("/redirect/untouched", original, sizeof original) == DSN_ERR_IO);
+  assert(!fs::exists(fixtures / "untouched"));
+  assert(service.fetchStart("https://example.test/book", "/link") == DSN_ERR_IO);
+  assert(dessen::DesktopServices("").fsRead("/saved", output, sizeof output) == DSN_ERR_UNAVAILABLE);
+
+  struct rlimit oldLimit;
+  assert(getrlimit(RLIMIT_FSIZE, &oldLimit) == 0);
+  const struct rlimit shortLimit{16, oldLimit.rlim_max};
+  const auto oldHandler = std::signal(SIGXFSZ, SIG_IGN);
+  assert(oldHandler != SIG_ERR && setrlimit(RLIMIT_FSIZE, &shortLimit) == 0);
+  assert(service.fsWrite("/saved", replacement, sizeof replacement) == DSN_ERR_IO);
+  assert(service.fetchStart("https://example.test/book", "/saved") == DSN_ERR_IO);
+  assert(setrlimit(RLIMIT_FSIZE, &oldLimit) == 0);
+  std::signal(SIGXFSZ, oldHandler);
+  assert(service.fsRead("/saved", output, sizeof output) == sizeof original);
+  assert(memcmp(output, original, sizeof original) == 0);
+  assert(std::distance(fs::directory_iterator(storage), fs::directory_iterator()) == 3);
+  assert(service.fetchStart("https://example.test/book", "/saved") == sizeof replacement);
+  assert(service.fsRead("/saved", output, sizeof output) == sizeof replacement);
+  fs::remove_all(base);
+}
+
+static void testHome(const char* path) {
+  using Host = dessen::FreeInkHost;
+  using State = dessen::State;
+  struct HomeServices : dessen::DesktopServices {
+    HomeServices() : DesktopServices("") {}
+    int recentShelf(uint32_t first, uint32_t count, char* out, uint32_t cap) override {
+      if (failAt == first) {
+        memset(out, '?', cap);
+        return DSN_ERR_IO;
+      }
+      return DesktopServices::recentShelf(first, count, out, cap);
+    }
+    uint32_t failAt = UINT32_MAX;
+  } services;
+  const std::string openedFixture = services.recentsFixture;
+  const std::string addedFixture = services.addedFixture;
+  char shelfRow[DSN_SHELF_RECORD_MAX];
+  const int n = services.recentShelf(0, 1, shelfRow, sizeof shelfRow);
+  assert(n > 0 && std::string(shelfRow, n) == "/books/dune.epub\tDune\tFrank Herbert\t-1\n");
+  services.recentsFixture.clear();
+  services.addedFixture.clear();
+  const std::string longPath = "/" + std::string(254, 'd') + "/" + std::string(250, 'b') + ".epub";
+  assert(longPath.size() == DSN_BOOK_PATH_MAX);
+  for (int i = 1; i <= 65; ++i) {
+    const std::string book = i == 65 ? longPath : "/books/" + std::to_string(i) + ".epub";
+    services.addedFixture += book + "\tBook " + std::to_string(i) + "\t" + std::string(120, 'a') + "\t-1\n";
+  }
+
+  Host host;
+  host.setServices(&services);
+  TraceTarget target;
+  DeviceContext dev;
+  dev.width = 479;
+  dev.height = 480;
+  InputSnapshot none, next, confirm;
+  next.next = true;
+  confirm.confirm = true;
+  auto wait = [&](InputSnapshot input, Host::Swipe swipe = Host::SwipeNone) {
+    target.ops.clear();
+    auto state = host.step(target, dev, input, swipe);
+    while (state == State::Running) state = host.step(target, dev, none);
+    assert(state == State::Waiting);
+  };
+  auto shows = [&](const std::string& text) {
+    for (const auto& op : target.ops)
+      if (op.find(text) != std::string::npos) return true;
+    return false;
+  };
+  auto load = [&] {
+    assert(host.load(mem, readApp(path), sizeof mem));
+    wait(none);
+  };
+
+  load();
+  assert(shows(" 1-2"));
+  wait(none, Host::SwipeUp);
+  assert(shows(" 3-4"));
+  wait(none, Host::SwipeDown);
+  assert(shows(" 1-2"));
+  InputSnapshot edge;
+  edge.touchReleased = true;
+  edge.touchX = 478;
+  edge.touchY = 450;
+  assert(host.step(target, dev, edge) == State::Launch);
+  assert(host.launch() == dessen::Launch::Home && host.launchHomeDest() == DSN_HOME_SETTINGS);
+
+  load();
+  for (int i = 0; i < 64; ++i) wait(next);
+  assert(shows(" Book 65") && shows(" 65") && !shows(" 63-64"));
+  wait(next);
+  assert(host.step(target, dev, confirm) == State::Launch);
+  assert(host.launchPath() == longPath);
+
+  services.addedFixture.insert(0, "\n\n");
+  load();
+  assert(shows(" 1-2") && !shows(" Book "));
+  wait(none, Host::SwipeUp);
+  assert(shows(" 3-4") && shows(" Book 1"));
+
+  services.addedFixture.erase(0, 2);
+  services.failAt = 2;
+  load();
+  wait(none, Host::SwipeUp);
+  assert(host.step(target, dev, confirm) == State::Launch);
+  assert(std::string(host.launchPath()) == "/books/1.epub");
+  services.failAt = UINT32_MAX;
+
+  services.recentsFixture = openedFixture;
+  services.addedFixture = addedFixture;
+  load();
+  assert(shows(" Dune") && shows("37%") && shows(" Hyperion") && !shows(" Neuromancer"));
+  wait(none, Host::SwipeUp);
+  assert(shows(" Neuromancer") && !shows(" Dune"));
+  assert(host.step(target, dev, confirm) == State::Launch);
+  assert(std::string(host.launchPath()) == "/books/neuromancer.epub");
+
+  services.recentsFixture.resize(services.recentsFixture.find('\n') + 1);
+  services.failAt = 0;
+  load();
+  assert(shows(" Dune") && !shows(" Neuromancer"));
+  services.failAt = UINT32_MAX;
+  wait(none, Host::SwipeUp);
+  assert(shows(" Dune") && shows(" Neuromancer"));
+
+  services.recentsFixture = openedFixture;
+  services.addedFixture.clear();
+  load();
+  assert(shows(" Dune") && shows(" Hyperion"));
+  wait(none, Host::SwipeUp);
+  assert(host.step(target, dev, confirm) == State::Launch);
+  assert(std::string(host.launchPath()) == "/books/dune.epub");
+}
+
 int main(int argc, char** argv) {
-  assert(argc == 8);
+  assert(argc == 9);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -146,6 +304,24 @@ int main(int argc, char** argv) {
   back.back = true;
   assert(host.step(target, screen, back) == dessen::State::Exited);
   assert(host.exitCode() == DSN_EV_BACK);
+
+  using Host = dessen::FreeInkHost;
+  for (auto dir : {std::pair{Host::SwipeUp, DSN_EV_SWIPE_UP}, {Host::SwipeDown, DSN_EV_SWIPE_DOWN},
+                   {Host::SwipeLeft, DSN_EV_SWIPE_LEFT}, {Host::SwipeRight, DSN_EV_SWIPE_RIGHT}}) {
+    assert(host.load(mem, readApp(argv[1]), sizeof mem));
+    while (host.step(target, screen, none) == dessen::State::Running) {}
+    assert(host.step(target, screen, none, dir.first) == dessen::State::Exited);
+    assert(host.exitCode() == dir.second);
+  }
+  for (bool left : {true, false}) {
+    assert(host.load(mem, readApp(argv[1]), sizeof mem));
+    while (host.step(target, screen, none) == dessen::State::Running) {}
+    InputSnapshot snap;
+    snap.swipeLeft = left;
+    snap.swipeRight = !left;
+    assert(host.step(target, screen, snap) == dessen::State::Exited);
+    assert(host.exitCode() == (left ? DSN_EV_SWIPE_LEFT : DSN_EV_SWIPE_RIGHT));
+  }
 
   // oob: a sandbox escape attempt ends as a fault, not a crash.
   assert(host.load(mem, readApp(argv[2]), sizeof mem));
@@ -250,6 +426,8 @@ int main(int argc, char** argv) {
 
   testAsync(argv[7]); // kBusy parking/poll path
   testPkcs12();       // PKCS#12 parse + blob layout
+  testDesktopStorage();
+  testHome(argv[8]);
 
   puts("freeink binding: PASS");
   return 0;
