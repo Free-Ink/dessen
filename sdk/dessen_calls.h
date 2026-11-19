@@ -119,6 +119,7 @@ static inline int dsn_open_book(const void *path, int path_len) { return (int)ds
 static inline int dsn_open_settings(void) { return (int)dsn_call0(DSN_SYS_OPEN_SETTINGS); }
 static inline int dsn_open_browser(void) { return (int)dsn_call0(DSN_SYS_OPEN_BROWSER); }
 static inline int dsn_recents(void *list, int list_len) { return (int)dsn_call2(DSN_SYS_RECENTS, (long)list, list_len); }
+static inline int dsn_library(void *list, int list_len) { return (int)dsn_call2(DSN_SYS_LIBRARY, (long)list, list_len); }
 static inline int dsn_book_progress(const void *path, int path_len) { return (int)dsn_call2(DSN_SYS_BOOK_PROGRESS, (long)path, path_len); }
 static inline int dsn_open_home(int dest) { return (int)dsn_call1(DSN_SYS_OPEN_HOME, (long)(((unsigned)dest & 0xff))); }
 static inline int dsn_font_load(const void *path, int path_len, int size) { return (int)dsn_call3(DSN_SYS_FONT_LOAD, (long)path, path_len, (long)(((unsigned)size & 0xffff))); }

@@ -145,6 +145,11 @@ int DesktopServices::recents(char* out, uint32_t cap) {
               reinterpret_cast<uint8_t*>(out), cap);
 }
 
+int DesktopServices::library(char* out, uint32_t cap) {
+  return give(reinterpret_cast<const uint8_t*>(libraryFixture.data()), libraryFixture.size(),
+              reinterpret_cast<uint8_t*>(out), cap);
+}
+
 int DesktopServices::fontLoad(const char* path, int size) {
   lastFontPath = path;
   lastFontSize = size;

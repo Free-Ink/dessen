@@ -39,6 +39,10 @@ class Services {
   // ---- launcher / home ----  for an app set as the device's home screen
   // Recent books, newline-separated records of "path\ttitle\tauthor\tpercent".
   virtual int recents(char*, uint32_t) { return -4; }
+  // Title-sorted index records in recents() format, with percent set to -1.
+  // Returns only complete records that fit, or zero if the index is absent.
+  // Call bookProgress() for the books you display.
+  virtual int library(char*, uint32_t) { return -4; }
   // Saved reading progress for a book: 0-100, or -1 if none.
   virtual int bookProgress(const char*) { return -1; }
   // Load a font from the app's folder for this app's custom font slot; returns

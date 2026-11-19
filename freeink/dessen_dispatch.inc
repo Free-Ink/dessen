@@ -564,6 +564,17 @@ case 99: { // recents
   a[0] = result;
   break;
 }
+case 104: { // library
+  const uint32_t list_len = a[1];
+  uint8_t* list = static_cast<uint8_t*>(dvm_ptr(vm, a[0], list_len));
+  (void)list_len;
+  const uint32_t list_addr = a[0]; (void)list_addr;
+  if (!list) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = self.services() ? self.services()->library(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
 case 100: { // book_progress
   const uint32_t path_len = a[1];
   const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));

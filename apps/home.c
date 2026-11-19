@@ -1,15 +1,16 @@
-// A stock home-screen app: a list of recent books with reading-progress bars.
-// Tap a book to open it in the reader; the footer buttons open the file browser
-// and settings. Set this as the device's home app and it replaces the firmware
-// home screen. Buttons: Prev/Next move the selection, Confirm opens it, Back =
-// browser. It re-reads recents every launch, so progress is always current.
+// A home screen showing books from the Library, with Recents as a fallback.
+// Tap a book or select it with Prev/Next and Confirm. Back opens Files.
 #include "dessen.h"
 
 #define MARGIN 24
 #define HEADER 72
-#define ROW_H 76
 #define FOOT_H 64
 #define MAX_BOOKS 16
+
+// Row height and text-line heights are resolved from the firmware's fonts at
+// startup (main). A text box shorter than the font's line height draws nothing,
+// so these must never be hardcoded below the real font size.
+static int rowH, titleLh, authorLh;
 
 struct Book {
   const char *path;
@@ -23,24 +24,25 @@ static struct Book books[MAX_BOOKS];
 static int nbooks, sel;
 static int W, H, listTop, listBottom;
 
-static int atoi_(const char *s);
 static int slen(const char *s);
 
-// Split the recents blob (lines of "path\ttitle\tauthor\tpercent") in place.
-static int parse(void) {
-  int n = dsn_recents(buf, sizeof buf - 1);
-  if (n < 0) return 0;
+// Split a book-list blob (lines of "path\ttitle\tauthor\tpercent") in place.
+// Prefer the whole library; fall back to recent books if the index isn't built.
+static int parse(int maxBooks) {
+  int n = dsn_library(buf, sizeof buf - 1);
+  if (n <= 0) n = dsn_recents(buf, sizeof buf - 1);
+  if (n < 0 || n >= (int)sizeof buf) return 0;
   buf[n] = 0;
   int count = 0;
   char *p = buf;
-  while (*p && count < MAX_BOOKS) {
-    char *fields[4] = {p, 0, 0, 0};
+  while (*p && count < maxBooks) {
+    char *fields[3] = {p, 0, 0};
     int f = 1;
     char *line_end = p;
     while (*line_end && *line_end != '\n') {
-      if (*line_end == '\t' && f < 4) {
+      if (*line_end == '\t') {
         *line_end = 0;
-        fields[f++] = line_end + 1;
+        if (f < 3) fields[f++] = line_end + 1;
       }
       line_end++;
     }
@@ -50,18 +52,12 @@ static int parse(void) {
       books[count].path = fields[0];
       books[count].title = fields[1];
       books[count].author = fields[2] ? fields[2] : "";
-      books[count].percent = fields[3] ? atoi_(fields[3]) : -1;
+      books[count].percent = dsn_book_progress(fields[0], slen(fields[0]));
       count++;
     }
     p = more ? line_end + 1 : line_end;
   }
   return count;
-}
-
-static int atoi_(const char *s) {
-  int v = 0;
-  while (*s >= '0' && *s <= '9') v = v * 10 + (*s++ - '0');
-  return v;
 }
 
 static void pct_str(char *out, int pct) {
@@ -81,34 +77,37 @@ static void draw(void) {
   dsn_text_box(MARGIN, 20, W - 2 * MARGIN, 40, "Library", 7, DSN_FONT_TITLE, DSN_ALIGN_LEFT, 1, 0);
 
   if (nbooks == 0) {
-    dsn_text_box(MARGIN, H / 2 - 20, W - 2 * MARGIN, 40, "No recent books. Open one from the file browser.", 48,
-                 DSN_FONT_BODY, DSN_ALIGN_CENTER, 2, 0);
+    dsn_text_box(MARGIN, H / 2 - 20, W - 2 * MARGIN, 60, "No books yet. Add books, then open the Library once to index them.",
+                 66, DSN_FONT_BODY, DSN_ALIGN_CENTER, 3, 0);
   }
   for (int i = 0; i < nbooks; i++) {
-    int y = listTop + i * ROW_H;
-    if (y + ROW_H > listBottom) break;
+    int y = listTop + i * rowH;
+    if (y + rowH > listBottom) break;
     if (i == sel) {  // selection frame
-      dsn_fill(MARGIN - 6, y - 4, W - 2 * MARGIN + 12, ROW_H - 8, DSN_BLACK);
-      dsn_fill(MARGIN - 3, y - 1, W - 2 * MARGIN + 6, ROW_H - 14, DSN_WHITE);
+      dsn_fill(MARGIN - 6, y - 4, W - 2 * MARGIN + 12, rowH - 8, DSN_BLACK);
+      dsn_fill(MARGIN - 3, y - 1, W - 2 * MARGIN + 6, rowH - 14, DSN_WHITE);
     }
-    dsn_text_box(MARGIN, y, W - 2 * MARGIN - 70, 28, books[i].title, slen(books[i].title), DSN_FONT_BODY,
+    dsn_text_box(MARGIN, y, W - 2 * MARGIN - 70, titleLh, books[i].title, slen(books[i].title), DSN_FONT_BODY,
                  DSN_ALIGN_LEFT, 1, DSN_TEXT_BOLD);
-    dsn_text_box(MARGIN, y + 26, W - 2 * MARGIN - 70, 22, books[i].author, slen(books[i].author), DSN_FONT_SMALL,
-                 DSN_ALIGN_LEFT, 1, 0);
+    dsn_text_box(MARGIN, y + titleLh, W - 2 * MARGIN - 70, authorLh, books[i].author, slen(books[i].author),
+                 DSN_FONT_SMALL, DSN_ALIGN_LEFT, 1, 0);
     // progress bar + percent
-    int barY = y + 50, barW = W - 2 * MARGIN - 70;
+    int barY = y + titleLh + authorLh + 6, barW = W - 2 * MARGIN - 70;
     dsn_stroke(MARGIN, barY, barW, 8, DSN_BLACK, 1, 0, 0);
     if (books[i].percent > 0) dsn_fill(MARGIN, barY, barW * books[i].percent / 100, 8, DSN_BLACK);
     char pc[8];
     pct_str(pc, books[i].percent);
-    dsn_text_box(W - MARGIN - 64, y + 20, 64, 28, pc, slen(pc), DSN_FONT_BODY, DSN_ALIGN_RIGHT, 1, 0);
+    dsn_text_box(W - MARGIN - 64, y, 64, titleLh, pc, slen(pc), DSN_FONT_BODY, DSN_ALIGN_RIGHT, 1, 0);
   }
 
-  // footer hints
-  int fy = H - FOOT_H + 20;
-  dsn_line(0, H - FOOT_H, W, H - FOOT_H, 1, DSN_BLACK);
-  dsn_text_box(MARGIN, fy, (W - 2 * MARGIN) / 2, 28, "Back: Files", 11, DSN_FONT_SMALL, DSN_ALIGN_LEFT, 1, 0);
-  dsn_text_box(W / 2, fy, (W - 2 * MARGIN) / 2, 28, "Hold Back: Settings", 19, DSN_FONT_SMALL, DSN_ALIGN_RIGHT, 1, 0);
+  // Footer: two tappable buttons (touch devices have no Back key, so never rely
+  // on it). On button devices Back also opens Files.
+  int fy = H - FOOT_H, bh = FOOT_H - 12, half = W / 2;
+  dsn_line(0, fy, W, fy, 1, DSN_BLACK);
+  dsn_stroke(MARGIN, fy + 6, half - MARGIN - 6, bh, DSN_BLACK, 1, 8, DSN_CORNERS_ALL);
+  dsn_text_box(MARGIN, fy + 6, half - MARGIN - 6, bh, "Files", 5, DSN_FONT_BODY, DSN_ALIGN_CENTER, 1, 0);
+  dsn_stroke(half + 6, fy + 6, half - MARGIN - 6, bh, DSN_BLACK, 1, 8, DSN_CORNERS_ALL);
+  dsn_text_box(half + 6, fy + 6, half - MARGIN - 6, bh, "Settings", 8, DSN_FONT_BODY, DSN_ALIGN_CENTER, 1, 0);
   dsn_refresh();
 }
 
@@ -121,16 +120,36 @@ static int slen(const char *s) {
 int main(void) {
   W = dsn_screen_width();
   H = dsn_screen_height();
+  titleLh = dsn_line_height(DSN_FONT_BODY);
+  authorLh = dsn_line_height(DSN_FONT_SMALL);
+  rowH = titleLh + authorLh + 8 + 14;  // title + author + progress bar + padding
   listTop = HEADER;
   listBottom = H - FOOT_H - 8;
-  nbooks = parse();
+  const int visibleRows = listBottom > listTop ? (listBottom - listTop) / rowH : 0;
+  nbooks = parse(visibleRows < MAX_BOOKS ? visibleRows : MAX_BOOKS);
   draw();
 
   for (;;) {
     int e = dsn_wait_event(), type = DSN_EV_TYPE(e);
     if (type == DSN_EV_BACK) {
-      dsn_open_browser();  // ends the app
+      dsn_open_browser();  // ends the app (button devices)
       return 0;
+    }
+    if (type == DSN_EV_TAP) {
+      int y = DSN_EV_Y(e);
+      if (y >= H - FOOT_H) {  // footer: Files (left) / Settings (right)
+        if (DSN_EV_X(e) < W / 2) dsn_open_browser();
+        else dsn_open_settings();
+        return 0;
+      }
+      if (nbooks && y >= listTop && y < listBottom) {
+        int i = (y - listTop) / rowH;
+        if (i < nbooks) {
+          dsn_open_book(books[i].path, slen(books[i].path));
+          return 0;
+        }
+      }
+      continue;
     }
     if (nbooks == 0) continue;
     if (type == DSN_EV_PREV) {
@@ -140,16 +159,6 @@ int main(void) {
     } else if (type == DSN_EV_CONFIRM) {
       dsn_open_book(books[sel].path, slen(books[sel].path));
       return 0;
-    } else if (type == DSN_EV_TAP) {
-      int y = DSN_EV_Y(e);
-      if (y >= listTop && y < listBottom) {
-        int i = (y - listTop) / ROW_H;
-        if (i < nbooks) {
-          dsn_open_book(books[i].path, slen(books[i].path));
-          return 0;
-        }
-      }
-      continue;
     } else {
       continue;
     }

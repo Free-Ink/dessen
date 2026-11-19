@@ -88,6 +88,7 @@
 97 open_settings() -> i32          : return self.requestLaunch(2, 0, 0);
 98 open_browser() -> i32           : return self.requestLaunch(3, 0, 0);
 99 recents(out list) -> i32        : result = self.services() ? self.services()->recents(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
+104 library(out list) -> i32        : result = self.services() ? self.services()->library(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
 100 book_progress(buf path) -> i32 : result = svcProgress(self, path, path_len);
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 102 font_load(buf path, u16 size) -> i32 : result = svcFontLoad(self, path, path_len, (int)size);
