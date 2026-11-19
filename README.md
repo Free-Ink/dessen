@@ -106,6 +106,42 @@ app.c ──(RISC-V GCC)──▶ app.bin ──┐
 Flash cost on an ESP32-C3 (`-Os`): ~1.3 KB interpreter + ~2.8 KB binding. Zero
 when the firmware build doesn't enable it.
 
+## Alternatives we evaluated
+
+The question was how to run user-supplied "apps" on a reader without reflashing.
+Flash cost was the deciding factor, because CrossPoint's rule is that an unused
+feature must cost nothing, and the firmware image already fills most of its
+slot. The figures below are **engine code size** (`text+data`) compiled for the
+ESP32-C3 at `-Os` and measured directly (see Method), not quoted.
+
+| Approach | App is | Engine flash | Authoring | Why not |
+|---|---|---:|---|---|
+| **dessen** (this repo) | compiled RV32IM `.bin` | **~1.3 KB** + ~2.8 KB binding | needs a compiler (a tool can hide it) | — chosen |
+| Lua 5.4 | `.lua` text file | ~119 KB¹ (141 KB full) | edit on the SD card, no toolchain | 30× the flash; GC on a 380 KB heap |
+| MicroQuickJS | `.js` text file | ~109 KB² | edit on the SD card; same language as plugin.js | 27× the flash; heavier RAM |
+| QuickJS (full) | `.js` text file | ~377 KB | full modern JS | won't fit the headroom |
+| wasm3 (WASM) | `.wasm` from C/Rust/Zig | ~74 KB | needs a compiler *and* a wasm toolchain | 18× the flash, still needs a compiler |
+| Berry | `.be` text file | ~70 KB core³ (129 KB full) | edit on the SD card | 17×+ the flash |
+| Chain-load whole firmware `.bin`s | a full firmware image | ~0 engine | build a whole firmware per app | reflash per launch; MBs per app; partition/bootloader work; no sandbox |
+| Emulate an ESP32 in the ESP32 | an unmodified firmware `.bin` | n/a | — | infeasible: RAM, closed radio blobs, ~20–50× slowdown |
+| Extend `device.json` (declarative) | a JSON manifest | ~0 | edit on the SD card | can't compute anything (no games, tools, logic) |
+
+Every scripting-engine row would **also** need the same ~2.8 KB FreeInk binding
+on top, plus its own interpreter heap in RAM; the compiled-bin approach needs
+neither. The one thing the scripting engines win is authoring — editing a text
+file straight on the card, no compiler — which is what a host-side
+[authoring tool](docs/writing-apps.md) is meant to close for dessen.
+
+<sup>¹ Lua core+parser+useful stdlibs, dropping io/os/debug/package. ² mquickjs +
+dtoa + libm + cutils (Bellard's own figure is ~100 KB ROM). ³ Berry core without
+the optional `*lib` modules, which are needed for a usable embed.</sup>
+
+**Method:** each engine's C sources were compiled with
+`riscv32-esp-elf-gcc -march=rv32imc_zicsr_zifencei -mabi=ilp32 -Os
+-ffunction-sections -fdata-sections` and summed with `size` (`text+data`). These
+are code size only, before link-time garbage collection, and exclude the C
+library each engine pulls in. dessen's own number is reproduced by `make size`.
+
 ## Repo layout
 
 ```
