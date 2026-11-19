@@ -120,6 +120,7 @@ ESP32-C3 at `-Os` and measured directly (see Method), not quoted.
 | Lua 5.4 | `.lua` text file | ~119 KB¹ (141 KB full) | edit on the SD card, no toolchain | 30× the flash; GC on a 380 KB heap |
 | MicroQuickJS | `.js` text file | ~109 KB² | edit on the SD card; same language as plugin.js | 27× the flash; heavier RAM |
 | QuickJS (full) | `.js` text file | ~377 KB | full modern JS | won't fit the headroom |
+| JerryScript | `.js` text file | ~565 KB⁴ | edit on the SD card | largest of the lot; even reduced profiles stay in the hundreds of KB |
 | wasm3 (WASM) | `.wasm` from C/Rust/Zig | ~74 KB | needs a compiler *and* a wasm toolchain | 18× the flash, still needs a compiler |
 | Berry | `.be` text file | ~70 KB core³ (129 KB full) | edit on the SD card | 17×+ the flash |
 | Chain-load whole firmware `.bin`s | a full firmware image | ~0 engine | build a whole firmware per app | reflash per launch; MBs per app; partition/bootloader work; no sandbox |
@@ -134,7 +135,8 @@ file straight on the card, no compiler — which is what a host-side
 
 <sup>¹ Lua core+parser+useful stdlibs, dropping io/os/debug/package. ² mquickjs +
 dtoa + libm + cutils (Bellard's own figure is ~100 KB ROM). ³ Berry core without
-the optional `*lib` modules, which are needed for a usable embed.</sup>
+the optional `*lib` modules, which are needed for a usable embed. ⁴ JerryScript
+default profile, all 200 core TUs; it is configurable downward but stays large.</sup>
 
 **Method:** each engine's C sources were compiled with
 `riscv32-esp-elf-gcc -march=rv32imc_zicsr_zifencei -mabi=ilp32 -Os
@@ -158,6 +160,30 @@ AGENTS.md      guide for building apps / capabilities with an AI assistant
 
 The firmware side (the activity that runs an app, the plugin-menu hook) lives in
 the CrossPoint repo, behind `-DCROSSPOINT_DESSEN_APPS`.
+
+## Why "dessen"
+
+Named after **Jason Dessen**, the physicist at the center of Blake Crouch's
+*Dark Matter*. He builds a chamber — the Box — that holds a person in quantum
+superposition: inside it you are every version of yourself at once, in the box
+and not in the box, and nothing is real until a choice collapses it into a
+single world.
+
+A dessen app lives the same way. The `.bin` on the SD card is both an app and
+not an app — inert bytes until the firmware opens the box and runs it. It
+executes *inside* the firmware yet was never flashed *into* it; it is present on
+the device yet separable from it; it is, at rest, a superposition of every app
+the reader could become. Launching one is the observation that collapses it: of
+all the versions waiting in `/plugins/`, this is the one the device is, right
+now, until you leave and it returns to being just a file.
+
+And the sandbox is the Box itself — a sealed space where an app runs in its own
+world, able to see out through narrow windows (the system calls) but never to
+reach out and touch the world that contains it. Whatever happens in there stays
+in there. Close the lid and the device is exactly as it was.
+
+> *"Are you happy with your life?"* — the question that opens the Box. Every app
+> is a different answer.
 
 ## Contributing
 
