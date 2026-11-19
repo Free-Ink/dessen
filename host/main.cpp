@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
   freeink::ui::InputSnapshot input;
   const clock_t t0 = clock();
   for (;;) {
-    const dessen::State state = host.step(target, screen, input, 1000000);
+    const dessen::State state = host.step(target, screen, input, dessen::FreeInkHost::SwipeNone, 1000000);
     input = {};
     if (host.takeRefreshRequest()) puts("refresh");
     if (state == dessen::State::Launch) {

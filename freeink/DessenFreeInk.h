@@ -37,8 +37,12 @@ class FreeInkHost {
   //
   // The app's coordinate space is device.safeRect(): it cannot draw under a
   // bezel, and taps outside the safe area are not delivered.
+  // A touch swipe for this step. dessen carries it itself rather than on the
+  // shared InputSnapshot, since the SDK has no vertical-swipe field and nothing
+  // outside dessen needs one.
+  enum Swipe { SwipeNone = 0, SwipeUp, SwipeDown, SwipeLeft, SwipeRight };
   State step(freeink::ui::DrawTarget& target, const freeink::ui::DeviceContext& device,
-             const freeink::ui::InputSnapshot& input, uint32_t budget = 200000);
+             const freeink::ui::InputSnapshot& input, Swipe swipe = SwipeNone, uint32_t budget = 200000);
 
   // Entropy for the app's random() call, e.g. esp_random. Without one the
   // app gets a weak fallback sequence, fine for tests and nothing else.

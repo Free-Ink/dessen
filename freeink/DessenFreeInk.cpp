@@ -28,13 +28,16 @@ View viewOf(const DeviceContext& device) {
   return View{safe.width, safe.height, safe.x, safe.y};
 }
 
-uint32_t eventOf(const InputSnapshot& in, View view) {
+uint32_t eventOf(const InputSnapshot& in, View view, FreeInkHost::Swipe swipe) {
   if (in.confirm) return DSN_EV_CONFIRM;
   if (in.back) return DSN_EV_BACK;
-  if (in.swipeUp) return DSN_EV_SWIPE_UP;
-  if (in.swipeDown) return DSN_EV_SWIPE_DOWN;
-  if (in.swipeLeft) return DSN_EV_SWIPE_LEFT;
-  if (in.swipeRight) return DSN_EV_SWIPE_RIGHT;
+  switch (swipe) {
+    case FreeInkHost::SwipeUp: return DSN_EV_SWIPE_UP;
+    case FreeInkHost::SwipeDown: return DSN_EV_SWIPE_DOWN;
+    case FreeInkHost::SwipeLeft: return DSN_EV_SWIPE_LEFT;
+    case FreeInkHost::SwipeRight: return DSN_EV_SWIPE_RIGHT;
+    default: break;
+  }
   if (in.prev || in.focusPrev) return DSN_EV_PREV;
   if (in.next || in.focusNext) return DSN_EV_NEXT;
   if (in.touchReleased) {  // a tap, or a press-and-hold, both with coordinates
@@ -290,14 +293,15 @@ void FreeInkHost::finishAsync(int code) {
   asyncPending_ = false;
 }
 
-State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const InputSnapshot& input, uint32_t budget) {
+State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const InputSnapshot& input, Swipe swipe,
+                        uint32_t budget) {
   if (state_ == State::Exited || state_ == State::Faulted) return state_;
   if (state_ == State::Busy) {
     const int code = services_ ? services_->poll() : DSN_ERR_IO;
     if (code == kPending) return state_; // still working; try again next tick
     finishAsync(code);                   // result ready: resume the VM below
   } else if (state_ == State::Waiting) {
-    const uint32_t ev = eventOf(input, viewOf(device));
+    const uint32_t ev = eventOf(input, viewOf(device), swipe);
     if (!ev) return state_;
     vm_.x[10] = ev; // wait_event's return value
   }
