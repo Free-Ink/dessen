@@ -24,6 +24,45 @@ static int slen(const char *s) {
   return n;
 }
 
+// No libc: tiny unsigned-to-decimal, returns the number of chars written.
+static int putn(char *b, int v) {
+  char tmp[8];
+  int i = 0;
+  if (v == 0) { b[0] = '0'; return 1; }
+  while (v > 0 && i < 8) { tmp[i++] = '0' + v % 10; v /= 10; }
+  for (int j = 0; j < i; j++) b[j] = tmp[i - 1 - j];
+  return i;
+}
+
+// A home theme draws its own chrome: a centered "H:MM AM  87%" line up top,
+// from the clock and battery capabilities.
+static char status[32];
+static void drawStatus(void) {
+  int n = 0;
+  dsn_clock_t c;
+  if (dsn_clock(&c, sizeof c) == 0) {
+    int h = c.hour % 12;
+    if (h == 0) h = 12;
+    n += putn(status + n, h);
+    status[n++] = ':';
+    status[n++] = '0' + c.minute / 10;
+    status[n++] = '0' + c.minute % 10;
+    status[n++] = ' ';
+    status[n++] = c.hour < 12 ? 'A' : 'P';
+    status[n++] = 'M';
+  }
+  int b = dsn_battery();
+  if (b >= 0) {
+    if (n) { status[n++] = ' '; status[n++] = ' '; }
+    n += putn(status + n, b & 0xff);
+    status[n++] = '%';
+  }
+  if (n) {
+    int lh = dsn_line_height(DSN_FONT_SMALL);
+    dsn_text_box(0, 24, W, lh, status, n, DSN_FONT_SMALL, DSN_ALIGN_CENTER, 1, 0);
+  }
+}
+
 // Pull just the first (most recent) book's path out of the recents blob.
 static void loadCurrentBook(void) {
   int n = dsn_recents(buf, sizeof buf - 1);
@@ -48,6 +87,7 @@ static void build(void) {
 
 static void draw(void) {
   dsn_clear();
+  drawStatus();
   int lh = dsn_line_height(DSN_FONT_TITLE);
   for (int i = 0; i < nitems; i++) {
     int y = top + i * ITEM_H;

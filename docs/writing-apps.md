@@ -141,9 +141,84 @@ surface:
 | `dsn_measure_text(s,len,font,flags) -> u32` | `width<<16 \| height` before drawing |
 | `dsn_line_height(font) -> px` | Line height of a font |
 | `dsn_bitmap(x,y,w,h,data,len,bw,bh,format,mode,color,rotation)` -> 0/-1 | 1-bit image |
+| `dsn_list_row(x,y,w,h,label,len,flags)` -> 0/-1 | One menu row, drawn like the device's own lists |
+| `dsn_grid_cell(x,y,w,h,cols,rows,gap,col,row,colspan,rowspan,&cell,sizeof cell)` -> 0/-1 | One cell of a grid |
+| `dsn_split(x,y,w,h,axis,gap,lens,lens_len,slots,slots_len)` -> count/-1 | Divide a rect into flex/fixed slots |
+| `dsn_ui_begin()` / `dsn_ui_event()` -> packed | Start a widget render pass / block and route input |
+| `dsn_button / dsn_checkbox(x,y,w,h,label,len,action,flags)` | Interactive controls (real fui widgets) |
+| `dsn_toggle(x,y,w,h,action,flags)` / `dsn_progress_bar(x,y,w,h,permille)` | Toggle switch / progress bar |
 
 Colors: `DSN_WHITE / DSN_BLACK / DSN_LIGHT_GRAY / DSN_DARK_GRAY`.
 Fonts: `DSN_FONT_SMALL / _BODY / _TITLE`. Text flags: `DSN_TEXT_BOLD / _INVERTED`.
+
+**Menus: use `dsn_list_row`, don't hand-roll one.** For any list of choices,
+draw each entry with `dsn_list_row` instead of composing your own
+fill + text + chevron. It renders the row the way the firmware's own menus do —
+the system selection highlight, the trailing chevron, the spacing and the
+font — so your app looks like part of the device, and tracks the UI if the
+theme changes. You still own layout, scrolling and hit-testing: lay the rows out
+down the screen, remember each row's `y`/height to turn a tap back into an index,
+and pass the row's state in `flags` (`DSN_ROW_SELECTED` for the highlighted row,
+`DSN_ROW_CHEVRON` for a row that opens another screen, `DSN_ROW_DISABLED` to dim
+one and drop its chevron). See `draw_list` in the Protected Content app, or the
+`dsn_list_row` check in `apps/drawtest.c`. Reach for the raw `dsn_fill` /
+`dsn_text_box` primitives only for chrome a row can't express.
+
+**Positioning: let the layout engine place things.** `dsn_grid_cell` and
+`dsn_split` are the firmware's own layout math, so a grid of tiles or a row of
+panels lines up the way the rest of the device does, at any screen size, without
+you hand-computing pixels. They compute rects and draw nothing — you get a
+`dsn_rect_t` back and draw into it with the normal calls:
+
+```c
+dsn_rect_t c;                       // a 3x3 board, 4px gutters, inside the safe area
+for (int i = 0; i < 9; i++) {
+  dsn_grid_cell(0, 0, w, w, 3, 3, 4, i % 3, i / 3, 1, 1, &c, sizeof c);
+  dsn_fill(c.x, c.y, c.w, c.h, DSN_LIGHT_GRAY);
+}
+```
+
+`dsn_split` divides a rect along an axis into slots that are either `DSN_LEN_FIXED`
+(exact px) or `DSN_LEN_FLEX` (share the leftover by weight) — a fixed sidebar
+next to a flexible body, a toolbar of equal buttons, and so on. Each slot is 4
+bytes `{u8 kind, i16 value, u8 flex}`; it writes one `dsn_rect_t` per slot.
+
+### Interactive widgets (buttons, checkboxes, toggles)
+
+For controls the user operates, use the widget calls instead of drawing your own
+and hit-testing taps by hand. They draw the firmware's real controls *and* route
+input the native way: a tap goes to the control under it, and on button-only
+boards PREV/NEXT move a focus highlight and CONFIRM fires the focused control —
+all handled for you. The shape is a render loop bracketed by `dsn_ui_begin` and
+`dsn_ui_event`:
+
+```c
+enum { A_SAVE = 1, A_WRAP = 2 };          // your own nonzero action ids
+int wrap = 0;
+for (;;) {
+  dsn_clear();
+  dsn_ui_begin();                          // start the pass: clears the hit table
+  dsn_checkbox(16, 70, w - 32, 48, "Wrap", 4, A_WRAP, wrap ? DSN_W_CHECKED : 0);
+  dsn_button(16, 140, w - 32, 56, "Save", 4, A_SAVE, 0);
+  dsn_refresh();
+  unsigned e = dsn_ui_event();             // blocks; routes the next input
+  int a = DSN_UI_ACTION(e);
+  if (a == A_SAVE) break;
+  else if (a == A_WRAP) wrap = !wrap;
+  else if (a == 0 && DSN_UI_SYS(e) == DSN_UI_BACK) break;  // Back pressed
+  // (a == 0 && DSN_UI_SYS == DSN_UI_REDRAW: focus moved — just loop and redraw)
+}
+```
+
+Give each interactive widget a **nonzero** action id. `dsn_ui_event` returns a
+packed value: when `DSN_UI_ACTION(e)` is nonzero a widget fired (with
+`DSN_UI_VALUE(e)` its value, e.g. a list index); otherwise `DSN_UI_SYS(e)` is a
+system code — `DSN_UI_BACK` (Back, nothing consumed it: usually quit) or
+`DSN_UI_REDRAW` (focus moved, so repaint to show the new highlight). Flags:
+`DSN_W_CHECKED` (checkbox ticked / toggle on), `DSN_W_DISABLED` (dimmed). See
+`apps/widgets.c`. `dsn_progress_bar` is display-only (no action). Mixing modes:
+an app that calls `dsn_ui_event` shouldn't also call `dsn_wait_event` in the same
+loop — pick one input model per screen.
 
 Calls that can fail on bad input (`text_box`, `bitmap`) return `-1`; check it
 during development. The host silently refuses anything out of range — it never

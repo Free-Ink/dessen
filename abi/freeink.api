@@ -36,6 +36,11 @@
 23 measure_text(str s, u8 font, u8 flags) -> u32 : { const TextStyle st = textStyle(font, 0, 1, flags); const Size m = target.measureText(st.font, s, st); result = static_cast<uint32_t>(static_cast<uint16_t>(m.width)) << 16 | static_cast<uint16_t>(m.height); }
 24 line_height(u8 font) -> i32 : result = static_cast<uint32_t>(target.lineHeight(textStyle(font, 0, 1, 0).font));
 25 bitmap(i16 x, i16 y, i16 w, i16 h, buf data, u16 bw, u16 bh, u8 format, u8 mode, u8 color, u8 rotation) -> i32 : result = drawBitmap(target, screen, x, y, w, h, data, data_len, bw, bh, format, mode, color, rotation);
+26 list_row(i16 x, i16 y, i16 w, i16 h, str label, u8 flags) -> i32 : result = drawListRow(target, self.device_, self.interactions_, screen, x, y, w, h, label, flags);
+
+# --- layout engine (pure geometry; computes rects, draws nothing) ---
+27 grid_cell(i16 x, i16 y, i16 w, i16 h, u8 cols, u8 rows, u8 gap, u8 col, u8 row, u8 colspan, u8 rowspan, out cell) -> i32 : result = layoutGridCell(x, y, w, h, cols, rows, gap, col, row, colspan, rowspan, cell, cell_len);
+28 split(i16 x, i16 y, i16 w, i16 h, u8 axis, u8 gap, buf lengths, out slots) -> i32 : result = layoutSplit(x, y, w, h, axis, gap, lengths, lengths_len, slots, slots_len);
 
 # ==== Capabilities (see docs/proposed-capabilities.md). Each host statement
 # ==== sanitizes app input, then calls a Services method; async calls return a
@@ -44,10 +49,22 @@
 # --- core (32-39) ---
 32 time() -> u32               : result = self.services() ? self.services()->timeNow() : 0;
 33 device_id(out id) -> i32    : result = svcDeviceId(self, id, id_len);
+35 clock(out t) -> i32         : result = svcClock(self, t, t_len);
 34 random_bytes(out buf) -> i32 : self.randomBytesInto(buf, buf_len); result = buf_len;
 
 # --- UI (40-47) ---
 40 text_input(str prompt, out text, u8 flags) -> i32 : return self.beginTextInput(prompt, text, text_len, (int)flags);
+
+# Interactive widgets: real freeink::ui components. ui_begin() starts a render
+# pass (clears the hit table); each widget draws and registers its hit; the app
+# parks on ui_event(), which routes the next tap / button-nav to a widget's
+# action (low 16 = action, high 16 = value) or a system code (back / redraw).
+41 ui_begin() : self.interactions_.clear();
+42 ui_event() -> u32 : self.uiWait_ = true; return kWait;
+43 button(i16 x, i16 y, i16 w, i16 h, str label, u16 action, u8 flags) -> i32 : result = drawButton(target, self.device_, self.interactions_, screen, x, y, w, h, label, action, flags);
+44 checkbox(i16 x, i16 y, i16 w, i16 h, str label, u16 action, u8 flags) -> i32 : result = drawCheckbox(target, self.device_, self.interactions_, screen, x, y, w, h, label, action, flags);
+45 toggle(i16 x, i16 y, i16 w, i16 h, u16 action, u8 flags) -> i32 : result = drawToggle(target, self.device_, self.interactions_, screen, x, y, w, h, action, flags);
+46 progress_bar(i16 x, i16 y, i16 w, i16 h, u16 permille) -> i32 : result = drawProgress(target, self.device_, self.interactions_, screen, x, y, w, h, permille);
 
 # --- storage (48-55) ---
 48 fs_list(buf path, out entries) -> i32 : result = svcFs(self, 'l', path, path_len, entries, entries_len, 0, 0);
@@ -88,3 +105,4 @@
 100 book_progress(buf path) -> i32 : result = svcProgress(self, path, path_len);
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 102 font_load(buf path, u16 size) -> i32 : result = svcFontLoad(self, path, path_len, (int)size);
+103 wifi_connect() -> i32 : return self.beginWifi();

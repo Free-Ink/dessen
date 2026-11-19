@@ -65,6 +65,22 @@ DesktopServices::DesktopServices(std::string fsRoot, std::string appDir, std::st
 
 // ---- core ----
 uint32_t DesktopServices::timeNow() { return static_cast<uint32_t>(::time(nullptr)); }
+
+int DesktopServices::clock(uint8_t* out) {
+  const time_t now = ::time(nullptr);
+  struct tm t;
+  localtime_r(&now, &t);
+  const unsigned year = static_cast<unsigned>(t.tm_year + 1900);
+  out[0] = year & 0xff;
+  out[1] = (year >> 8) & 0xff;
+  out[2] = static_cast<uint8_t>(t.tm_mon + 1);
+  out[3] = static_cast<uint8_t>(t.tm_mday);
+  out[4] = static_cast<uint8_t>(t.tm_hour);
+  out[5] = static_cast<uint8_t>(t.tm_min);
+  out[6] = static_cast<uint8_t>(t.tm_sec);
+  out[7] = static_cast<uint8_t>(t.tm_wday);
+  return 0;
+}
 bool DesktopServices::randomBytes(uint8_t* out, uint32_t n) { return RAND_bytes(out, static_cast<int>(n)) == 1; }
 int DesktopServices::deviceId(char* out, uint32_t cap) {
   static const char* kId = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff";
@@ -315,6 +331,8 @@ int DesktopServices::accel(uint8_t* out) {
 }
 
 // ---- async (synchronous on desktop) ----
+int DesktopServices::wifiConnectStart() { return 0; }  // desktop is always online
+
 int DesktopServices::netStart(const char* head, const uint8_t*, uint32_t, uint8_t* resp, uint32_t cap) {
   // Fixture: first line "METHOD url"; map to <netRoot>/<host><path> + .status.
   if (netRoot_.empty()) return DSN_ERR_UNAVAILABLE;

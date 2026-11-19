@@ -22,6 +22,7 @@ class Services {
 
   // ---- core ----
   virtual uint32_t timeNow() { return 0; }                          // Unix seconds, 0 = unknown
+  virtual int clock(uint8_t*) { return -4; }  // 8 bytes local time: u16 year, u8 month,day,hour,min,sec,wday
   virtual bool randomBytes(uint8_t*, uint32_t) { return false; }    // false -> binding's fallback RNG
   virtual int deviceId(char*, uint32_t) { return -4; }             // stable printable id; length or err
 
@@ -60,6 +61,11 @@ class Services {
   virtual int battery() { return -4; }
   virtual int haptic(int, int) { return -4; }
   virtual int accel(uint8_t*) { return -4; }  // 6 bytes: int16 x,y,z milli-g, LE
+
+  // Bring up Wi-Fi by attempting the device's saved networks. Async: returns
+  // kPending, then poll() reports 0 (connected) or a DSN_ERR_*. A no-op that
+  // returns 0 immediately when already connected.
+  virtual int wifiConnectStart() { return -4; }
 
   // ---- async: Start returns a final code, or kPending (then poll() each tick).
   //            The out buffer passed to Start is filled by the service. ----

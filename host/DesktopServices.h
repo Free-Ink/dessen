@@ -17,6 +17,7 @@ class DesktopServices : public Services {
 
   // core
   uint32_t timeNow() override;
+  int clock(uint8_t* out) override;
   bool randomBytes(uint8_t* out, uint32_t n) override;
   int deviceId(char* out, uint32_t cap) override;
   // storage
@@ -49,6 +50,7 @@ class DesktopServices : public Services {
   int battery() override;
   int haptic(int ms, int intensity) override;
   int accel(uint8_t* out) override;
+  int wifiConnectStart() override;
   // async — desktop completes them synchronously, so poll() is never reached
   int netStart(const char* head, const uint8_t* body, uint32_t bn, uint8_t* resp, uint32_t cap) override;
   int fetchStart(const char* url, const char* dest) override;

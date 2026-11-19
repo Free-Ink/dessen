@@ -5,8 +5,8 @@ RISCV ?= $(HOME)/.platformio/tools/toolchain-riscv32-esp/bin/riscv32-esp-elf-
 # will fail to link. Add a small runtime to sdk/ when an app first needs one.
 APPFLAGS = -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -mno-relax \
            -fno-tree-loop-distribute-patterns -Wall -Isdk -T sdk/app.ld -Wl,--no-warn-rwx-segments
-APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal
-SD_APPS = hello lightsout dice sudoku home minimal
+APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal widgets
+SD_APPS = hello lightsout dice sudoku home minimal widgets
 
 # FreeInk SDK checkout, used read-only for its UI headers.
 FREEINK_SDK ?= ../freeink-sdk
@@ -37,11 +37,17 @@ build/dessen_vm.o: vm/dessen_vm.c vm/dessen_vm.h sdk/dessen_abi.h $(GEN)
 	@mkdir -p build
 	cc -O2 -Wall -Wextra -Ivm -Isdk -c vm/dessen_vm.c -o $@
 
-build/dessen: host/main.cpp build/dessen_vm.o $(BINDING)
-	c++ $(HOSTFLAGS) host/main.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
+# The FreeInk UI component library, so the binding can project its real widgets.
+# Built host-side with a tiny Arduino.h shim (host/shim) for min/max/map/abs.
+build/fui.o: $(FREEINK_SDK)/libs/ui/FreeInkUI/src/FreeInkUI.cpp
+	@mkdir -p build
+	c++ $(HOSTFLAGS) -Ihost/shim -c $< -o $@
 
-build/test_freeink: freeink/test_host.cpp build/dessen_vm.o $(BINDING)
-	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
+build/dessen: host/main.cpp build/dessen_vm.o build/fui.o $(BINDING)
+	c++ $(HOSTFLAGS) host/main.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o build/fui.o $(OPENSSL_LIBS) -o $@
+
+build/test_freeink: freeink/test_host.cpp build/dessen_vm.o build/fui.o $(BINDING)
+	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o build/fui.o $(OPENSSL_LIBS) -o $@
 
 build/%.bin: apps/%.c sdk/crt0.S sdk/rt.c sdk/app.ld sdk/dessen.h sdk/dessen_abi.h $(GEN)
 	@mkdir -p build
@@ -66,7 +72,7 @@ test: all
 	  printf 'the book bytes here' > $$nr/example.test/book.bin; \
 	  DESSEN_NET_ROOT=$$nr DESSEN_FS_ROOT=$$fs build/dessen build/nettest.bin; rc=$$?; \
 	  rm -rf $$nr $$fs; test $$rc -eq 0 && echo 'nettest: PASS'
-	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin
+	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/widgets.bin
 	@echo PASS
 
 # Plugin folders ready to copy into /plugins on the SD card.

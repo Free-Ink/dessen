@@ -73,7 +73,11 @@ the stable `tools/` path.
    app works on every board. Decode taps with `DSN_EV_X/Y`.
 3. Draw to `dsn_screen_width/height()` (the safe area); never hardcode a panel
    size. Use the firmware fonts (`DSN_FONT_*`), not your own glyphs, unless you
-   deliberately want bitmap digits (see `dice.c`).
+   deliberately want bitmap digits (see `dice.c`). For a **menu**, draw each
+   entry with `dsn_list_row` (flags: `DSN_ROW_SELECTED/_CHEVRON/_DISABLED`) so it
+   looks like the device's own lists — don't hand-roll a selection bar from
+   `fill` + `text`. The app still owns layout, scroll and tap→index math; see
+   `draw_list` in the Protected Content app.
 4. Remember the limits: 64 KB fixed memory, no libc, no `malloc`, no 64-bit
    divide helper unless you add one. Hand-write small helpers like the examples.
 5. Add `<name>` to `APPS` (and `SD_APPS` if it should launch on a device) in the
@@ -111,6 +115,33 @@ When an app needs something FreeInk/CrossPoint can do but no call exposes:
    blocks (TLS, large reads), a "call-in-progress / resume" state that does not
    exist yet. Flag that to the user before starting — don't invent a blocking
    call inside the render task.
+
+## Recipe: expose an fui component
+
+The binding links the real FreeInk UI library (`build/fui.o`, built with the
+tiny `host/shim/Arduino.h` so it compiles off-device), so a widget call projects
+the *actual* `freeink::ui` component rather than re-drawing it. `list_row`,
+`button`, `checkbox`, `toggle`, `progress_bar` are done; the rest of
+`components/` follows the same shape.
+
+- **Draw-only** component (header, status-bar, metric-card, divider…): a helper
+  that `clip()`s the rect, builds a `Frame<kUiMaxInteractions>` over the host's
+  `interactions_` (a default `InputSnapshot` — drawing doesn't route), fills the
+  component's `*Props` from the call args, and calls the component. See
+  `drawProgress` in `DessenFreeInk.cpp`. Include its header in the control
+  block at the top (the control headers are Arduino-free; `media/` ones aren't).
+- **Interactive** component (button, list, dropdown, slider, tabs…): same, plus
+  give it a nonzero `ActionId` from the app so it registers a hit. The app
+  brackets its pass with `ui_begin` (clears `interactions_`) and `ui_event`
+  (parks; `routeUi` maps the next tap / PREV-NEXT focus / CONFIRM to a widget
+  action). Don't add app-side tap math — routing is the whole point.
+- Keep the app's value (list index, slider position) in the `value` field; it
+  comes back in `DSN_UI_VALUE`. Leave a `widgets.c`-style check in
+  `test_host.cpp` driving both a tap and button-nav.
+
+Only the `media/` components need an Arduino symbol (`min`) in their header;
+expose those behind the shim or inline the geometry. Don't speculatively mirror
+the whole catalog — add a component when an app reaches for it.
 
 ## When NOT to proceed without asking
 

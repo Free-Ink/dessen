@@ -30,6 +30,20 @@ int main(void) {
   CHECK(7, dsn_bitmap(200, 10, 8, 8, smiley, 4, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == -1);      // buffer too short
   CHECK(8, dsn_bitmap(w - 4, 10, 8, 8, smiley, 8, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == -1);    // leaves the screen
   CHECK(9, dsn_bitmap(200, 10, 8, 8, smiley, 8, 8, 8, 9, 0, DSN_BLACK, 0) == -1);                    // unknown format
+
+  // a native menu row: selected (gray fill) with a trailing chevron (two lines)
+  CHECK(12, dsn_list_row(8, 300, w - 16, 52, "Menu", 4, DSN_ROW_SELECTED | DSN_ROW_CHEVRON) == 0);
+  CHECK(13, dsn_list_row(0, h + 10, w, 52, "off screen", 10, 0) == -1); // fully clipped away
+
+  // layout engine: a 2x2 grid cell, and a fixed+flex row split.
+  dsn_rect_t cell;
+  CHECK(14, dsn_grid_cell(0, 0, 100, 100, 2, 2, 0, 1, 1, 1, 1, &cell, sizeof cell) == 0);
+  CHECK(15, cell.x == 50 && cell.y == 50 && cell.w == 50 && cell.h == 50);
+  CHECK(16, dsn_grid_cell(0, 0, 100, 100, 2, 2, 0, 2, 0, 1, 1, &cell, sizeof cell) == -1); // column out of range
+  unsigned char lens[8] = {DSN_LEN_FIXED, 30, 0, 0, DSN_LEN_FLEX, 0, 0, 1}; // 30px, then the rest
+  dsn_rect_t slots[2];
+  CHECK(17, dsn_split(0, 0, 100, 20, DSN_AXIS_ROW, 0, lens, sizeof lens, (unsigned char *)slots, sizeof slots) == 2);
+  CHECK(18, slots[0].w == 30 && slots[1].x == 30 && slots[1].w == 70);
   dsn_refresh();
   return 0;
 }

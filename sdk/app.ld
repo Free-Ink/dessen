@@ -1,5 +1,5 @@
 /* One flat block: code, data, bss, then stack growing down from the top. */
-MEMORY { ram (rwx) : ORIGIN = 0, LENGTH = 64K }
+MEMORY { ram (rwx) : ORIGIN = 0, LENGTH = DEFINED(APP_MEM) ? APP_MEM : 64K }
 ENTRY(_start)
 SECTIONS {
   .text   : { KEEP(*(.header)) *(.text._start) *(.text .text.*) } > ram
