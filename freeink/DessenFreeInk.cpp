@@ -31,12 +31,17 @@ View viewOf(const DeviceContext& device) {
 uint32_t eventOf(const InputSnapshot& in, View view) {
   if (in.confirm) return DSN_EV_CONFIRM;
   if (in.back) return DSN_EV_BACK;
+  if (in.swipeUp) return DSN_EV_SWIPE_UP;
+  if (in.swipeDown) return DSN_EV_SWIPE_DOWN;
+  if (in.swipeLeft) return DSN_EV_SWIPE_LEFT;
+  if (in.swipeRight) return DSN_EV_SWIPE_RIGHT;
   if (in.prev || in.focusPrev) return DSN_EV_PREV;
   if (in.next || in.focusNext) return DSN_EV_NEXT;
-  if (in.touchReleased) {
+  if (in.touchReleased) {  // a tap, or a press-and-hold, both with coordinates
     const int32_t x = in.touchX - view.originX, y = in.touchY - view.originY;
     if (in.touchX < 0 || in.touchY < 0 || x < 0 || y < 0 || x >= view.width || y >= view.height) return 0;
-    return DSN_EV_TAP | (static_cast<uint32_t>(x) & 0xfff) << 8 | (static_cast<uint32_t>(y) & 0xfff) << 20;
+    const uint32_t kind = in.longPress ? DSN_EV_LONG_PRESS : DSN_EV_TAP;
+    return kind | (static_cast<uint32_t>(x) & 0xfff) << 8 | (static_cast<uint32_t>(y) & 0xfff) << 20;
   }
   return 0;
 }

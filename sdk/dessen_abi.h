@@ -61,9 +61,14 @@ typedef struct {
 // works on button-only and touch boards.
 #define DSN_EV_CONFIRM 1
 #define DSN_EV_BACK 2
-#define DSN_EV_PREV 3
-#define DSN_EV_NEXT 4
-#define DSN_EV_TAP 5
+#define DSN_EV_PREV 3  // Up button / focus-prev
+#define DSN_EV_NEXT 4  // Down button / focus-next
+#define DSN_EV_TAP 5         // carries x, y
+#define DSN_EV_LONG_PRESS 6  // press and hold; carries x, y like a tap
+#define DSN_EV_SWIPE_UP 7    // the four directional touch swipes (no coordinates)
+#define DSN_EV_SWIPE_DOWN 8
+#define DSN_EV_SWIPE_LEFT 9
+#define DSN_EV_SWIPE_RIGHT 10
 #define DSN_EV_TYPE(e) ((e) & 0xff)
 #define DSN_EV_X(e) (((e) >> 8) & 0xfff)
 #define DSN_EV_Y(e) (((e) >> 20) & 0xfff)
