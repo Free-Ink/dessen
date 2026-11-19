@@ -69,11 +69,17 @@ the stable `tools/` path.
    (drawing + random), `apps/lightsout.c` / `apps/sudoku.c` (grids, touch +
    buttons). Follow the draw → refresh → `wait_event` loop; redraw only on
    change.
-2. Offer **both** a touch path and a button path (CONFIRM/BACK/PREV/NEXT) so the
-   app works on every board. Decode taps with `DSN_EV_X/Y`.
+2. Offer **both** a touch path and a button path so the app works on every
+   board: CONFIRM/BACK activate, PREV/NEXT (up/down keys) move a selection,
+   swipes (`SWIPE_UP/DOWN/…`) page, taps/long-press carry `DSN_EV_X/Y`. Boards
+   with keys *and* touch deliver all of them, distinctly.
 3. Draw to `dsn_screen_width/height()` (the safe area); never hardcode a panel
    size. Use the firmware fonts (`DSN_FONT_*`), not your own glyphs, unless you
-   deliberately want bitmap digits (see `dice.c`).
+   deliberately want bitmap digits (see `dice.c`). Follow the layout rules in
+   [`docs/writing-apps.md`](docs/writing-apps.md#laying-out-a-screen) — above all,
+   **size every text box with `dsn_line_height()`**: a box shorter than the font's
+   line height draws *nothing* (the #1 "blank UI" bug), and it only shows up on a
+   real device, since the desktop test font is tiny.
 4. Remember the limits: 64 KB fixed memory, no libc, no `malloc`, no 64-bit
    divide helper unless you add one. Hand-write small helpers like the examples.
 5. Add `<name>` to `APPS` (and `SD_APPS` if it should launch on a device) in the

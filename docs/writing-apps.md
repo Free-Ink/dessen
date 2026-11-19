@@ -101,11 +101,23 @@ int main(void) {
 
 ### Events are semantic, not physical
 
-You get `CONFIRM / BACK / PREV / NEXT / TAP`, never raw buttons. The firmware
-maps each board's keys to these, so the **same binary** works on a
-touch-and-button reader and a buttons-only one. Always offer a button path *and*
-a touch path (as the examples do) so your app is usable everywhere. Holding
-**Back** for one second always force-quits, so the user is never trapped.
+You get semantic events, never raw buttons. The firmware maps each board's keys
+and gestures to these, so the **same binary** works on a touch-and-button reader
+and a buttons-only one:
+
+- `CONFIRM` / `BACK` — the confirm/back keys (activate / go back).
+- `PREV` / `NEXT` — the up/down keys (and focus-prev/next). Use them to **move a
+  selection**, not to page.
+- `TAP` / `LONG_PRESS` — a touch and a press-and-hold; both carry `x, y`
+  (`DSN_EV_X/Y(e)`).
+- `SWIPE_UP` / `SWIPE_DOWN` / `SWIPE_LEFT` / `SWIPE_RIGHT` — the four touch
+  swipes (no coordinates). Use vertical swipes to **page/scroll**.
+
+A board with up/down keys *and* touch (most of them) delivers both, so these stay
+distinct: keys move the selection, a swipe pages, a tap opens. Always offer a
+button path *and* a touch path (as the examples do) so your app is usable
+everywhere. Holding **Back** for one second always force-quits, so the user is
+never trapped.
 
 ### Coordinates respect the bezel automatically
 
@@ -148,6 +160,30 @@ Fonts: `DSN_FONT_SMALL / _BODY / _TITLE`. Text flags: `DSN_TEXT_BOLD / _INVERTED
 Calls that can fail on bad input (`text_box`, `bitmap`) return `-1`; check it
 during development. The host silently refuses anything out of range — it never
 trusts an app value — so a bug draws nothing rather than corrupting the device.
+
+## Laying out a screen
+
+The firmware's fonts and components give you the device's look for free, but a
+few rules keep spacing honest. `apps/home.c` follows all of them.
+
+- **Size text boxes by line height — never hardcode a height.** `dsn_text_box`
+  draws **nothing** (returns `-1`) if its rect is shorter than one line of the
+  font. A box that looked fine with a 16px test font vanishes on a device whose
+  body font is ~30px. Height a row or box with `dsn_line_height(font)` (× the
+  line count), not a guessed pixel value.
+- **Let the box center the text.** The firmware vertically centers text in the
+  rect you pass, so give a row its full height and a single `y` — don't add your
+  own offset on top, or it double-centers.
+- **Measure before you place.** For content that sits below variable or wrapped
+  text, use `dsn_measure_text` rather than a magic gap, so the layout holds for
+  any string and any board font size.
+- **One gutter, everywhere.** Pick a single side margin (~28px) and draw every
+  screen to `GUTTER … width-GUTTER`. A title row with a hairline rule
+  (`dsn_line` in `DSN_LIGHT_GRAY`) under it gives structure cheaply.
+- **Selection = an inset rounded pill.** `dsn_fill_round(... , radius, corners)`
+  inset from the gutter reads better than an edge-to-edge gray bar. Keep
+  contrast: don't draw a gray element (e.g. a progress bar) on the gray
+  selection fill — swap it to white when the row is selected.
 
 ## Constraints to design around
 
