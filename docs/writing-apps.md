@@ -225,6 +225,46 @@ in this repo:
 
 Wire either into the `test:` target so `make test` covers your app.
 
+## Reacting to firmware events
+
+The firmware emits a small set of events (`reader.open`, `reader.exit`,
+`reader.session`, `book.downloaded`, `sleep.enter`). Your plugin can hook one by
+adding an `events` section to its `device.json` that names your app:
+
+```jsonc
+{
+  "events": {
+    "reader.exit":    { "app": "app.bin", "mode": "read"   },
+    "book.downloaded":{ "app": "app.bin", "mode": "launch" }
+  }
+}
+```
+
+- **`read`** — the firmware appends the event (one JSON line) to
+  `app-events.jsonl` in your plugin folder. Nothing happens on screen; your app
+  processes the queue the next time it runs.
+- **`launch`** — same queue, and the firmware also opens your app full-screen
+  right away (except for `sleep.enter`, where there is no UI). Opening a new app
+  mid-flow is intrusive, so prefer `read` unless the event really should
+  interrupt the reader.
+
+Read the queue from your own app directory and clear it when done — it is plain
+text, one JSON object per line:
+
+```c
+char dir[128];
+dsn_fs_app_dir(dir, sizeof dir);          // e.g. "/plugins/myapp"
+char path[160];
+int plen = /* build dir + "/app-events.jsonl" into path */;
+char buf[1024];
+int n = dsn_fs_read(path, plen, buf, sizeof buf);
+if (n > 0) { /* parse the lines you care about */ dsn_fs_delete(path, plen); }
+```
+
+The `vars` object carries the event's fields (`book`, `percent`, `title`, …).
+Events route to `app-events.jsonl`, never the network outbox, so the firmware's
+own event delivery never touches or deletes your queue.
+
 ## Getting it onto a device
 
 ```sh
