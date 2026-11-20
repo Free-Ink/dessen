@@ -101,7 +101,38 @@ size: $(GEN)
 	    -Ivm -Isdk -Ifreeink -I$(FREEINK_SDK)/libs/ui/FreeInkUI/include -c freeink/DessenFreeInk.cpp -o build/binding.c3.o
 	$(RISCV)size build/dessen_vm.c3.o build/binding.c3.o
 
+# A dessen app written in Rust, to show the runtime is language-agnostic: it
+# links against the same crt0.S + app.ld as the C apps, nothing else changes.
+# Not part of `test` (it needs the Rust toolchain). Run: make rust
+#   rustup target add riscv32im-unknown-none-elf   # one-time
+build/hello_rs.bin: apps/hello.rs sdk/dessen.rs sdk/crt0.S sdk/app.ld sdk/dessen_abi.h
+	@mkdir -p build
+	rustc --target riscv32im-unknown-none-elf --crate-type staticlib \
+	    -C panic=abort -C opt-level=s -o build/libhello_rs.a $<
+	$(RISCV)gcc -march=rv32im -mabi=ilp32 -nostdlib -mno-relax -Isdk -ffunction-sections \
+	    -T sdk/app.ld sdk/crt0.S build/libhello_rs.a -o build/hello_rs.elf \
+	    -Wl,--gc-sections,--no-warn-rwx-segments
+	$(RISCV)objcopy -O binary build/hello_rs.elf $@
+
+rust: build/hello_rs.bin build/dessen
+	printf 'c' | build/dessen build/hello_rs.bin | grep -q 'Hello from Rust on dessen'
+	@echo "rust app: PASS"
+
+# Same proof in Zig. Not part of `test` (needs the Zig toolchain). Run: make zig
+build/hello_zig.bin: apps/hello.zig sdk/dessen.zig sdk/crt0.S sdk/app.ld sdk/dessen_abi.h
+	@mkdir -p build
+	zig build-obj -target riscv32-freestanding-none -mcpu=generic_rv32+m -OReleaseSmall \
+	    -femit-bin=build/hello_zig.o --dep dsn -Mroot=$< -Mdsn=sdk/dessen.zig
+	$(RISCV)gcc -march=rv32im -mabi=ilp32 -nostdlib -mno-relax -Isdk -ffunction-sections \
+	    -T sdk/app.ld sdk/crt0.S build/hello_zig.o -o build/hello_zig.elf \
+	    -Wl,--gc-sections,--no-warn-rwx-segments
+	$(RISCV)objcopy -O binary build/hello_zig.elf $@
+
+zig: build/hello_zig.bin build/dessen
+	printf 'n' | build/dessen build/hello_zig.bin | grep -q 'Hello from Zig on dessen'
+	@echo "zig app: PASS"
+
 clean:
 	rm -rf build
 
-.PHONY: all test sd sync sync-accept size clean
+.PHONY: all test sd sync sync-accept size rust zig clean

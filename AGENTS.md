@@ -18,7 +18,8 @@ vm/            the interpreter (dessen_vm.c/.h) — portable C, no deps but memc
 sdk/           what an app links: dessen.h, generated headers, crt0.S, app.ld
 abi/freeink.api  THE SINGLE SOURCE OF TRUTH for the call list
 tools/gen_api.py generates sdk/dessen_calls.h, sdk/dessen_sysnums.h,
-                 and freeink/dessen_dispatch.inc from the .api file
+                 freeink/dessen_dispatch.inc, and the Rust/Zig app wrappers
+                 (sdk/dessen.rs, sdk/dessen.zig) from the .api file
 freeink/       the host binding: maps calls onto freeink::ui types (FreeInkHost)
 apps/          example + test apps (.c) with menu manifests (.json)
 host/          desktop runner (main.cpp) + TraceTarget for printing/asserting
@@ -42,8 +43,8 @@ the **crosspoint-reader** repo on branch `feat/dessen-apps`, behind
    coordinate or length from corrupting a draw. Never pass a raw app integer to
    an SDK call.
 3. **Generated files are generated.** Never hand-edit `sdk/dessen_calls.h`,
-   `sdk/dessen_sysnums.h`, or `freeink/dessen_dispatch.inc`. Edit
-   `abi/freeink.api` and run `python3 tools/gen_api.py`.
+   `sdk/dessen_sysnums.h`, `freeink/dessen_dispatch.inc`, `sdk/dessen.rs`, or
+   `sdk/dessen.zig`. Edit `abi/freeink.api` and run `python3 tools/gen_api.py`.
 4. **Keep it lazy.** Match CrossPoint's "unused features cost nothing" rule. The
    interpreter and binding are tiny on purpose. Add a call only when a real app
    needs it; don't speculatively mirror the whole SDK.

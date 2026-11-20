@@ -293,6 +293,31 @@ The firmware launches any plugin folder that contains an `app.bin`. Holding
 > `platformio.ini`). Firmware and apps are built from the same ABI, so rebuild
 > both together when the call list changes.
 
+## Other languages
+
+Nothing here is C-specific. An app is just a freestanding **RV32IM** image (no
+compressed/`C` extension, no float, ≤64 KB, `_start` → `main` → `exit`) that
+reaches the host through one instruction: `ecall` with the call number in `a7`,
+args in `a0`–`a6`, result in `a0`. Any language with a freestanding RV32IM
+backend works — the runtime never learns what produced the bytes.
+
+The C `hello` is rewritten verbatim in two other languages as worked examples,
+each linking against the *same* `sdk/crt0.S` and `sdk/app.ld` as the C apps. The
+`ecall` wrappers are **generated** from `abi/freeink.api` by `tools/gen_api.py` —
+the same single source of truth as the C header — so every call is first-class
+in all three languages, with the ABI's arg-packing handled for you:
+
+- [`apps/hello.rs`](../apps/hello.rs) — **Rust** (`#![no_std]`, no allocator).
+  `include!("../sdk/dessen.rs")`, then call `dsn_clear()`, `dsn_text_box(…)`, …
+  `make rust` (one-time: `rustup target add riscv32im-unknown-none-elf`).
+- [`apps/hello.zig`](../apps/hello.zig) — **Zig** (freestanding, no std).
+  `@import` the `dsn` module (`sdk/dessen.zig`), then `dsn.clear()`, `dsn.text_box(…)`.
+  `make zig` (one-time: install Zig).
+
+Freestanding **C++** works the same way. The one hard rule: target plain `im`,
+never `imc` — the VM only decodes 32-bit instructions, so a compressed
+instruction faults immediately.
+
 ## Adding a capability
 
 If your app needs something the firmware can do but no call exposes yet (a new
