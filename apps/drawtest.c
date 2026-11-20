@@ -28,7 +28,8 @@ int main(void) {
 
   CHECK(6, dsn_bitmap(200, 10, 8, 8, smiley, sizeof smiley, 8, 8, DSN_BITMAP_MASK, DSN_BITMAP_CENTER, DSN_BLACK, 0) == 0);
   CHECK(7, dsn_bitmap(200, 10, 8, 8, smiley, 4, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == -1);      // buffer too short
-  CHECK(8, dsn_bitmap(w - 4, 10, 8, 8, smiley, 8, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == -1);    // leaves the screen
+  CHECK(8, dsn_bitmap(w - 4, 10, 8, 8, smiley, 8, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == 0);     // partly off screen: clipped
+  CHECK(15, dsn_bitmap(w + 10, 10, 8, 8, smiley, 8, 8, 8, DSN_BITMAP_MASK, 0, DSN_BLACK, 0) == -1);  // fully off screen: refused
   CHECK(9, dsn_bitmap(200, 10, 8, 8, smiley, 8, 8, 8, 9, 0, DSN_BLACK, 0) == -1);                    // unknown format
 
   static unsigned char large[32768];

@@ -228,8 +228,9 @@ Wire either into the `test:` target so `make test` covers your app.
 ## Reacting to firmware events
 
 The firmware emits a small set of events (`reader.open`, `reader.exit`,
-`reader.session`, `book.downloaded`, `sleep.enter`). Your plugin can hook one by
-adding an `events` section to its `device.json` that names your app:
+`reader.session`, `book.downloaded`, `sleep.enter`, `reader.end`). Your plugin
+can hook one by adding an `events` section to its `device.json` that names your
+app:
 
 ```jsonc
 {
@@ -247,6 +248,16 @@ adding an `events` section to its `device.json` that names your app:
   right away (except for `sleep.enter`, where there is no UI). Opening a new app
   mid-flow is intrusive, so prefer `read` unless the event really should
   interrupt the reader.
+
+`reader.end` fires once when the reader reaches the last page. A `reader.end`
+handler may also set `"replaces": "end of book"` — reaching the end then opens
+your app full-screen *in place of* the firmware's end-of-book menu (this implies
+`launch`). Your app owns that screen: offer your own actions and exit (or launch
+another book) through the usual syscalls. Paging to the end again re-opens it.
+
+```jsonc
+"reader.end": { "app": "app.bin", "mode": "launch", "replaces": "end of book" }
+```
 
 Read the queue from your own app directory and clear it when done — it is plain
 text, one JSON object per line:

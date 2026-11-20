@@ -136,13 +136,14 @@ uint32_t drawText(DrawTarget& target, View screen, int32_t x, int32_t y, int32_t
 uint32_t drawBitmap(DrawTarget& target, View screen, int32_t x, int32_t y, int32_t w, int32_t h, const uint8_t* data,
                     uint32_t dataLen, uint32_t bw, uint32_t bh, uint32_t format, uint32_t mode, uint32_t color,
                     uint32_t rotation) {
-  const Rect r = clip(x, y, w, h, screen);
-  // Reject anything the target would have to guess about: unknown formats, a
-  // buffer shorter than the pixels it claims, or a rect that leaves the screen.
-  // FreeInk's sampler stores the source dimensions in signed 16-bit fields.
-  if (r.empty() || format > DSN_BITMAP_BW || mode > DSN_BITMAP_STRETCH || rotation > 3 ||
-      bw == 0 || bh == 0 || bw > INT16_MAX || bh > INT16_MAX ||
-      static_cast<uint64_t>((bw + 7) / 8) * bh > dataLen || r.width != w || r.height != h)
+  // Visible safe-area portion: if nothing is on-screen (or the rect/source is
+  // degenerate) there is nothing to draw. w/h are bounded to int16 so the
+  // full-rect cast below can't overflow. FreeInk's sampler stores the source
+  // dimensions in signed 16-bit fields.
+  const Rect vis = clip(x, y, w, h, screen);
+  if (vis.empty() || format > DSN_BITMAP_BW || mode > DSN_BITMAP_STRETCH || rotation > 3 ||
+      bw == 0 || bh == 0 || bw > INT16_MAX || bh > INT16_MAX || w > INT16_MAX || h > INT16_MAX ||
+      static_cast<uint64_t>((bw + 7) / 8) * bh > dataLen)
     return static_cast<uint32_t>(-1);
   BitmapRef ref;
   ref.data = data;
@@ -150,8 +151,19 @@ uint32_t drawBitmap(DrawTarget& target, View screen, int32_t x, int32_t y, int32
   ref.height = static_cast<uint16_t>(bh);
   ref.format = format == DSN_BITMAP_MASK ? BitmapFormat::Mask1 : BitmapFormat::BW1;
   ref.progmem = false;
-  target.bitmap(r, ref, mode == DSN_BITMAP_STRETCH ? BitmapMode::Stretch : BitmapMode::Center, paint(color),
-                static_cast<Rotation>(rotation));
+  const BitmapMode bm = mode == DSN_BITMAP_STRETCH ? BitmapMode::Stretch : BitmapMode::Center;
+  // The sampler lays the image out relative to its rect, so a partly-off-screen
+  // bitmap must keep its FULL rect (right scale/centering) and be cropped by a
+  // clip, not by shrinking the rect (which would distort or re-centre it). Set
+  // the clip to the visible safe area, draw at the full rect, restore. If the
+  // target can't clip (e.g. the trace target in tests), fall back to the
+  // visible rect — correct for the common fully-on-screen case (vis == full).
+  const Rect full{static_cast<int16_t>(x + screen.originX), static_cast<int16_t>(y + screen.originY),
+                  static_cast<int16_t>(w), static_cast<int16_t>(h)};
+  const Rect prevClip = target.clipRect();
+  const bool clipped = target.setClipRect(vis);
+  target.bitmap(clipped ? full : vis, ref, bm, paint(color), static_cast<Rotation>(rotation));
+  if (clipped) target.setClipRect(prevClip);
   return 0;
 }
 
