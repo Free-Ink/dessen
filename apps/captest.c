@@ -91,18 +91,5 @@ int main(void) {
 
   // --- keystore ---
   CHECK(33, dsn_keystore("/book.epub", 10, secret, 16, 0) == 0);
-
-  // --- custom font: font_load returns the custom slot, and text with it works ---
-  CHECK(37, dsn_font("/myapp/font.csf", 18) == DSN_FONT_CUSTOM);
-  CHECK(38, dsn_text_box(0, 0, 100, 20, "Aa", 2, DSN_FONT_CUSTOM, DSN_ALIGN_LEFT, 1, 0) == 0);
-  CHECK(39, dsn_font("/x", 2) == DSN_ERR_INVALID);  // size too small
-
-  // --- secure_wrap round-trip (opaque device-bound blob) ---
-  unsigned char blob[64], un[32];
-  int bl = dsn_secure_wrap(secret, 16, blob, sizeof blob);
-  CHECK(34, bl > 16);
-  CHECK(35, dsn_secure_unwrap(blob, bl, un, sizeof un) == 16 && eq(secret, un, 16));
-  blob[20] ^= 0xff;  // tamper -> authentication fails
-  CHECK(36, dsn_secure_unwrap(blob, bl, un, sizeof un) == DSN_ERR_INVALID);
   return 0;
 }

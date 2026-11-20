@@ -112,7 +112,7 @@ Paint paint(uint32_t color) {
 
 TextStyle textStyle(uint32_t font, uint32_t align, uint32_t maxLines, uint32_t flags) {
   TextStyle st;
-  st.font = static_cast<FontId>(font <= DSN_FONT_CUSTOM ? font : DSN_FONT_SMALL);
+  st.font = static_cast<FontId>(font <= DSN_FONT_TITLE ? font : DSN_FONT_SMALL);
   st.align = align == DSN_ALIGN_CENTER ? TextAlign::Center : align == DSN_ALIGN_RIGHT ? TextAlign::Right : TextAlign::Left;
   st.maxLines = static_cast<uint8_t>(maxLines < 1 ? 1 : maxLines > 16 ? 16 : maxLines);
   st.bold = flags & DSN_TEXT_BOLD;
@@ -240,12 +240,6 @@ int svcPkcs12(FreeInkHost& self, const uint8_t* p12, uint32_t n, const char* pas
   return svc(self) ? svc(self)->pkcs12Parse(p12, n, pass, out, cap) : DSN_ERR_UNAVAILABLE;
 }
 
-int svcSecure(FreeInkHost& self, int wrap, const uint8_t* in, uint32_t n, uint8_t* out, uint32_t cap) {
-  Services* s = svc(self);
-  if (!s) return DSN_ERR_UNAVAILABLE;
-  return wrap ? s->secureWrap(in, n, out, cap) : s->secureUnwrap(in, n, out, cap);
-}
-
 int svcClock(FreeInkHost& self, uint8_t* out, uint32_t cap) {
   if (cap < 8) return DSN_ERR_TOO_BIG;
   return svc(self) ? svc(self)->clock(out) : DSN_ERR_UNAVAILABLE;
@@ -256,13 +250,6 @@ int svcAccel(FreeInkHost& self, uint8_t* out, uint32_t cap) {
   return svc(self) ? svc(self)->accel(out) : DSN_ERR_UNAVAILABLE;
 }
 
-int svcFontLoad(FreeInkHost& self, const uint8_t* path, uint32_t pathLen, int size) {
-  Services* s = svc(self);
-  if (!s) return DSN_ERR_UNAVAILABLE;
-  char pbuf[kPathMax + 1];
-  if (!guestPath(path, pathLen, pbuf) || size < 4 || size > 400) return DSN_ERR_INVALID;
-  return s->fontLoad(pbuf, size);  // DSN_FONT_CUSTOM on success
-}
 
 int svcProgress(FreeInkHost& self, const uint8_t* path, uint32_t pathLen) {
   Services* s = svc(self);

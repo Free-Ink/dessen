@@ -32,9 +32,6 @@ class DesktopServices : public Services {
   int recentShelf(uint32_t first, uint32_t count, char* out, uint32_t cap) override;
   int bookCover(const char*, uint32_t, uint8_t*, uint32_t) override { return 0; }  // desktop has no covers
   int bookProgress(const char* path) override;
-  int fontLoad(const char* path, int size) override;
-  std::string lastFontPath;
-  int lastFontSize = 0;
   // crypto
   int hash(int algo, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) override;
   int aesCbc(int flags, const uint8_t* keyiv, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) override;
@@ -44,8 +41,6 @@ class DesktopServices : public Services {
   int rsaSign(int algo, const uint8_t* priv, uint32_t pn, const uint8_t* digest, uint32_t dn, uint8_t* out,
               uint32_t cap) override;
   int pkcs12Parse(const uint8_t* p12, uint32_t n, const char* pass, uint8_t* out, uint32_t cap) override;
-  int secureWrap(const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) override;
-  int secureUnwrap(const uint8_t* blob, uint32_t n, uint8_t* out, uint32_t cap) override;
   // board (stubs that record state so tests can assert on it)
   int backlightSet(int brightness, int warm) override;
   int backlightGet() override;

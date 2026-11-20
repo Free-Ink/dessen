@@ -22,7 +22,6 @@
 #define DSN_FONT_SMALL 0
 #define DSN_FONT_BODY 1
 #define DSN_FONT_TITLE 2
-#define DSN_FONT_CUSTOM 3  // the font a successful font_load() returns (one per app)
 
 #define DSN_ALIGN_LEFT 0
 #define DSN_ALIGN_CENTER 1

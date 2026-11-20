@@ -51,9 +51,6 @@ class Services {
   // or DSN_ERR_UNAVAILABLE where covers aren't supported (no PSRAM). May be slow
   // the first time (the cover is decoded and cached), so request one per redraw.
   virtual int bookCover(const char*, uint32_t, uint8_t*, uint32_t) { return -4; }
-  // Load a font from the app's folder for this app's custom font slot; returns
-  // DSN_FONT_CUSTOM on success. `size` is the point size (vector fonts).
-  virtual int fontLoad(const char*, int) { return -4; }
 
   // ---- crypto (synchronous) ----  return bytes written, or a DSN_ERR_*
   virtual int hash(int, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
@@ -62,8 +59,6 @@ class Services {
   virtual int rsaDecrypt(int, const uint8_t*, uint32_t, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int rsaSign(int, const uint8_t*, uint32_t, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int pkcs12Parse(const uint8_t*, uint32_t, const char*, uint8_t*, uint32_t) { return -4; }
-  virtual int secureWrap(const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
-  virtual int secureUnwrap(const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
 
   // ---- board (synchronous) ----
   virtual int backlightSet(int, int) { return -4; }

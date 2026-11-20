@@ -72,8 +72,6 @@
 68 rsa_decrypt(u8 flags, buf priv, buf data, out pt) -> i32 : result = svcRsa(self, 'd', (int)flags, priv, priv_len, data, data_len, pt, pt_len);
 69 rsa_sign(u8 algo, buf priv, buf digest, out sig) -> i32 : result = svcRsa(self, 's', (int)algo, priv, priv_len, digest, digest_len, sig, sig_len);
 70 pkcs12_parse(buf p12, str pass, out blob) -> i32      : result = svcPkcs12(self, p12, p12_len, pass, blob, blob_len);
-71 secure_wrap(buf data, out blob) -> i32                : result = svcSecure(self, 1, data, data_len, blob, blob_len);
-72 secure_unwrap(buf blob, out data) -> i32              : result = svcSecure(self, 0, blob, blob_len, data, data_len);
 
 # --- board services (80-95) ---
 80 backlight(i16 brightness, i16 warm) -> i32 : result = self.services() ? self.services()->backlightSet(brightness, warm) : DSN_ERR_UNAVAILABLE;
@@ -91,6 +89,5 @@
 104 recent_shelf(u32 first, u16 count, out list) -> i32 : if (count > DSN_SHELF_PAGE_MAX) result = DSN_ERR_INVALID; else if (self.services()) result = self.services()->recentShelf(first, count, reinterpret_cast<char*>(list), list_len); else result = DSN_ERR_UNAVAILABLE;
 100 book_progress(buf path) -> i32 : result = svcProgress(self, path, path_len);
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
-102 font_load(buf path, u16 size) -> i32 : result = svcFontLoad(self, path, path_len, (int)size);
 103 wifi_connect() -> i32 : return self.beginWifi();
 105 book_cover(buf path, u16 height, out pixels) -> i32 : result = svcBookCover(self, path, path_len, height, pixels, pixels_len);

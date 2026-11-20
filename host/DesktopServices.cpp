@@ -156,11 +156,6 @@ const EVP_MD* mdFor(int algo) {
   }
 }
 
-// A fixed device secret for secure_wrap on desktop (firmware uses an eFuse key).
-const uint8_t kWrapKey[32] = {0x6b, 0x65, 0x79, 0x66, 0x6f, 0x72, 0x64, 0x65, 0x73, 0x6b, 0x74,
-                              0x6f, 0x70, 0x77, 0x72, 0x61, 0x70, 0x30, 0x31, 0x32, 0x33, 0x34,
-                              0x35, 0x36, 0x37, 0x38, 0x39, 0x61, 0x62, 0x63, 0x64, 0x65};
-
 }  // namespace
 
 DesktopServices::DesktopServices(std::string fsRoot, std::string appDir, std::string netRoot)
@@ -305,12 +300,6 @@ int DesktopServices::recentShelf(uint32_t first, uint32_t count, char* out, uint
   return static_cast<int>(used);
 }
 
-int DesktopServices::fontLoad(const char* path, int size) {
-  lastFontPath = path;
-  lastFontSize = size;
-  return 3;  // DSN_FONT_CUSTOM — desktop has no real rasterizer; text still renders via the trace target
-}
-
 int DesktopServices::bookProgress(const char* path) {
   // Pull the percent for `path` out of the recents fixture; -1 if not listed.
   std::string needle = std::string(path) + "\t";
@@ -428,43 +417,6 @@ int DesktopServices::pkcs12Parse(const uint8_t* p12d, uint32_t n, const char* pa
   X509_free(cert);
   PKCS12_free(p12);
   return rc;
-}
-
-int DesktopServices::secureWrap(const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) {
-  if (2u + 12 + n + 16 > cap) return DSN_ERR_TOO_BIG; // ver(1)+pad(1)+nonce(12)+ct+tag(16)
-  out[0] = 1;
-  out[1] = 0;
-  uint8_t* nonce = out + 2;
-  RAND_bytes(nonce, 12);
-  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-  int outl = 0, finl = 0, rc = DSN_ERR_IO;
-  uint8_t* ct = out + 14;
-  if (ctx && EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, kWrapKey, nonce) == 1 &&
-      EVP_EncryptUpdate(ctx, ct, &outl, data, n) == 1 && EVP_EncryptFinal_ex(ctx, ct + outl, &finl) == 1 &&
-      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, ct + n) == 1) {
-    rc = static_cast<int>(2 + 12 + n + 16);
-  }
-  EVP_CIPHER_CTX_free(ctx);
-  return rc;
-}
-
-int DesktopServices::secureUnwrap(const uint8_t* blob, uint32_t n, uint8_t* out, uint32_t cap) {
-  if (n < 2u + 12 + 16 || blob[0] != 1) return DSN_ERR_INVALID;
-  const uint32_t ctn = n - 2 - 12 - 16;
-  if (ctn > cap) return DSN_ERR_TOO_BIG;
-  const uint8_t* nonce = blob + 2;
-  const uint8_t* ct = blob + 14;
-  uint8_t tag[16];
-  memcpy(tag, ct + ctn, 16);
-  EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-  int outl = 0, finl = 0, rc = DSN_ERR_INVALID;
-  if (ctx && EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, kWrapKey, nonce) == 1 &&
-      EVP_DecryptUpdate(ctx, out, &outl, ct, ctn) == 1 &&
-      EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag) == 1 && EVP_DecryptFinal_ex(ctx, out + outl, &finl) == 1) {
-    rc = outl + finl;
-  }
-  EVP_CIPHER_CTX_free(ctx);
-  return rc; // authentication failure -> DSN_ERR_INVALID
 }
 
 // ---- board ----

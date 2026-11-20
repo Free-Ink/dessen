@@ -462,36 +462,6 @@ case 70: { // pkcs12_parse
   a[0] = result;
   break;
 }
-case 71: { // secure_wrap
-  const uint32_t data_len = a[1];
-  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], data_len));
-  (void)data_len;
-  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t blob_len = a[3];
-  uint8_t* blob = static_cast<uint8_t*>(dvm_ptr(vm, a[2], blob_len));
-  (void)blob_len;
-  const uint32_t blob_addr = a[2]; (void)blob_addr;
-  if (!blob) { a[0] = static_cast<uint32_t>(-1); break; }
-  uint32_t result = 0;
-  result = svcSecure(self, 1, data, data_len, blob, blob_len);
-  a[0] = result;
-  break;
-}
-case 72: { // secure_unwrap
-  const uint32_t blob_len = a[1];
-  const uint8_t* blob = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], blob_len));
-  (void)blob_len;
-  if (!blob) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t data_len = a[3];
-  uint8_t* data = static_cast<uint8_t*>(dvm_ptr(vm, a[2], data_len));
-  (void)data_len;
-  const uint32_t data_addr = a[2]; (void)data_addr;
-  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
-  uint32_t result = 0;
-  result = svcSecure(self, 0, blob, blob_len, data, data_len);
-  a[0] = result;
-  break;
-}
 case 80: { // backlight
   const int32_t brightness = static_cast<int16_t>(a[0] >> 0); (void)brightness;
   const int32_t warm = static_cast<int16_t>(a[0] >> 16); (void)warm;
@@ -591,17 +561,6 @@ case 101: { // open_home
   const uint32_t dest = static_cast<uint8_t>(a[0] >> 0); (void)dest;
   uint32_t result = 0;
   return self.requestLaunchHome((int)dest);
-  a[0] = result;
-  break;
-}
-case 102: { // font_load
-  const uint32_t path_len = a[1];
-  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
-  (void)path_len;
-  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t size = static_cast<uint16_t>(a[2] >> 0); (void)size;
-  uint32_t result = 0;
-  result = svcFontLoad(self, path, path_len, (int)size);
   a[0] = result;
   break;
 }
