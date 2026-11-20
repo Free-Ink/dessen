@@ -1,21 +1,44 @@
-// A minimal home theme: a centered column of underlined text. "Continue
-// Reading" opens your most recent book; the items below are the usual home
-// destinations. Prev/Next move the selection, Confirm (or a tap) opens it.
-// Mark the manifest "home": true to pick it as the Home Launcher in Settings.
+// A minimal, declarative home launcher. Each row in MENU below is one entry:
+// a label, an optional icon, and what it opens — a BUILTIN firmware screen or
+// an installed dessen APP (by its app.bin path). Edit MENU to build your own
+// home. Mark the plugin manifest "home": true to pick it under
+// Settings -> Display -> Home Launcher. Prev/Next move the selection,
+// Confirm (or a tap) opens the entry.
 #include "dessen.h"
 
 #define ITEM_H 56
-#define MAXCOL 8
+#define ICON_PX 32
 
-struct Item {
+// What a launcher entry opens. The macros fill the {kind, dest, app} fields.
+enum { OPEN_BUILTIN, OPEN_APP, OPEN_BOOK };
+#define BUILTIN(screen) OPEN_BUILTIN, (screen), 0  // a firmware screen (DSN_HOME_*)
+#define APP(path)       OPEN_APP, 0, (path)        // an installed dessen app's app.bin
+#define BOOK            OPEN_BOOK, 0, 0            // the most recently read book
+
+typedef struct {
   const char *label;
-  int isBook;  // 1 = open the current book; else open_home(dest)
-  int dest;
+  const unsigned char *icon;  // optional ICON_PX-square 1-bit mask bitmap; 0 = text only
+  int kind;                   // OPEN_BUILTIN / OPEN_APP / OPEN_BOOK (set by the macros)
+  int dest;                   // DSN_HOME_* for BUILTIN
+  const char *app;            // ".../app.bin" for APP
+} Item;
+
+// ---------------------------------------------------------------------------
+// Your home. Reorder, add, or remove rows. BUILTIN(screen) opens a firmware
+// screen; APP("/plugins/<name>/app.bin") opens one of your installed dessen
+// apps. Set the 2nd field to a bitmap for an icon, or 0 for text only.
+// ---------------------------------------------------------------------------
+static const Item MENU[] = {
+    {"Library",  0, BUILTIN(DSN_HOME_LIBRARY)},
+    {"Files",    0, BUILTIN(DSN_HOME_FILES)},
+    {"Dice",     0, APP("/plugins/dice/app.bin")},
+    {"Settings", 0, BUILTIN(DSN_HOME_SETTINGS)},
 };
+#define MENU_N ((int)(sizeof MENU / sizeof MENU[0]))
 
 static char buf[1024];
 static const char *bookPath;
-static struct Item items[MAXCOL];
+static Item items[MENU_N + 1];  // MENU, optionally preceded by a Continue Reading row
 static int nitems, sel, W, H, top;
 
 static int slen(const char *s) {
@@ -73,15 +96,12 @@ static void loadCurrentBook(void) {
   if (buf[0] == '/') bookPath = buf;
 }
 
+// Assemble the visible list: the static MENU, preceded by Continue Reading when
+// there is a recent book to resume.
 static void build(void) {
   nitems = 0;
-  if (bookPath) items[nitems++] = (struct Item){"Continue Reading", 1, 0};
-  items[nitems++] = (struct Item){"Library", 0, DSN_HOME_LIBRARY};
-  items[nitems++] = (struct Item){"Files", 0, DSN_HOME_FILES};
-  items[nitems++] = (struct Item){"Plugins", 0, DSN_HOME_PLUGINS};
-  items[nitems++] = (struct Item){"OPDS", 0, DSN_HOME_OPDS};
-  items[nitems++] = (struct Item){"File Transfer", 0, DSN_HOME_TRANSFER};
-  items[nitems++] = (struct Item){"Settings", 0, DSN_HOME_SETTINGS};
+  if (bookPath) items[nitems++] = (Item){"Continue Reading", 0, BOOK};
+  for (int i = 0; i < MENU_N; i++) items[nitems++] = MENU[i];
   top = (H - nitems * ITEM_H) / 2;
 }
 
@@ -95,22 +115,28 @@ static void draw(void) {
     int flags = on ? DSN_TEXT_BOLD : 0;
     const char *s = items[i].label;
     int len = slen(s);
-    // centered text, with an underline the width of the text
+    // centered label, with an underline the width of the text
     dsn_text_box(0, y, W, lh, s, len, DSN_FONT_TITLE, DSN_ALIGN_CENTER, 1, flags);
     unsigned m = dsn_measure_text(s, len, DSN_FONT_TITLE, flags);
     int tw = (int)(m >> 16);
     int ux = (W - tw) / 2, uy = y + lh + 3;
     dsn_line(ux, uy, ux + tw, uy, on ? 3 : 1, DSN_BLACK);
-    if (on) {  // selection carets flanking the item
+    if (items[i].icon)  // optional icon, just left of the label
+      dsn_bitmap(ux - ICON_PX - 10, y, ICON_PX, ICON_PX, items[i].icon, (ICON_PX / 8) * ICON_PX, ICON_PX, ICON_PX,
+                 DSN_BITMAP_MASK, DSN_BITMAP_CENTER, DSN_BLACK, 0);
+    if (on)  // selection caret flanking the item
       dsn_text_box(ux - 40, y, 28, lh, "\xE2\x80\xA2", 3, DSN_FONT_TITLE, DSN_ALIGN_CENTER, 1, 0);
-    }
   }
   dsn_refresh();
 }
 
+// Open whatever the selected row points at. open_* end this app; the firmware
+// returns here (re-running the launcher) when that screen or app exits.
 static void activate(void) {
-  if (items[sel].isBook) dsn_open_book(bookPath, slen(bookPath));
-  else dsn_open_home(items[sel].dest);
+  const Item *it = &items[sel];
+  if (it->kind == OPEN_APP) dsn_open_app(it->app, slen(it->app));
+  else if (it->kind == OPEN_BOOK) { if (bookPath) dsn_open_book(bookPath, slen(bookPath)); }
+  else dsn_open_home(it->dest);
 }
 
 int main(void) {

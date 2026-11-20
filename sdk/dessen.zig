@@ -45,6 +45,7 @@ pub const DSN_SYS_ACCEL: usize = 84;
 pub const DSN_SYS_OPEN_BOOK: usize = 96;
 pub const DSN_SYS_OPEN_SETTINGS: usize = 97;
 pub const DSN_SYS_OPEN_BROWSER: usize = 98;
+pub const DSN_SYS_OPEN_APP: usize = 102;
 pub const DSN_SYS_RECENTS: usize = 99;
 pub const DSN_SYS_RECENT_SHELF: usize = 104;
 pub const DSN_SYS_BOOK_PROGRESS: usize = 100;
@@ -173,6 +174,7 @@ pub fn accel(xyz: []u8) i32 { return call2(DSN_SYS_ACCEL, @intFromPtr(xyz.ptr), 
 pub fn open_book(path: []const u8) i32 { return call2(DSN_SYS_OPEN_BOOK, @intFromPtr(path.ptr), path.len); }
 pub fn open_settings() i32 { return call0(DSN_SYS_OPEN_SETTINGS); }
 pub fn open_browser() i32 { return call0(DSN_SYS_OPEN_BROWSER); }
+pub fn open_app(path: []const u8) i32 { return call2(DSN_SYS_OPEN_APP, @intFromPtr(path.ptr), path.len); }
 pub fn recents(list: []u8) i32 { return call2(DSN_SYS_RECENTS, @intFromPtr(list.ptr), list.len); }
 pub fn recent_shelf(first: u32, count: i32, list: []u8) i32 { return call4(DSN_SYS_RECENT_SHELF, @as(usize, first), @as(usize, (@as(u32, @bitCast(count)) & 0xffff)), @intFromPtr(list.ptr), list.len); }
 pub fn book_progress(path: []const u8) i32 { return call2(DSN_SYS_BOOK_PROGRESS, @intFromPtr(path.ptr), path.len); }

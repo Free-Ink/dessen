@@ -326,13 +326,18 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
 }
 
 int FreeInkHost::requestLaunch(int kind, const uint8_t* path, uint32_t pathLen) {
-  launch_ = kind == 1 ? Launch::Reader : kind == 2 ? Launch::Settings : kind == 3 ? Launch::Browser : Launch::None;
+  launch_ = kind == 1   ? Launch::Reader
+            : kind == 2 ? Launch::Settings
+            : kind == 3 ? Launch::Browser
+            : kind == 4 ? Launch::App
+                        : Launch::None;
   launchPath_[0] = '\0';
   if (launch_ == Launch::None) {
     vm_.x[10] = static_cast<uint32_t>(DSN_ERR_INVALID);
     return 0;
   }
-  if (launch_ == Launch::Reader) {
+  // Reader and App both carry a path the firmware opens; validate it here.
+  if (launch_ == Launch::Reader || launch_ == Launch::App) {
     if (!guestPath(path, pathLen, launchPath_, DSN_BOOK_PATH_MAX)) {
       launch_ = Launch::None;
       vm_.x[10] = static_cast<uint32_t>(DSN_ERR_INVALID);

@@ -68,6 +68,7 @@ test: all
 	printf nc | build/dessen build/home.bin | grep -q 'launch reader /books/hyperion.epub'
 	printf nnc | build/dessen build/home.bin | grep -q 'launch reader /books/neuromancer.epub'
 	build/dessen build/home.bin </dev/null | grep -q '37%'
+	printf nnnc | build/dessen build/minimal.bin | grep -q 'launch app /plugins/dice/app.bin'
 	@tmp=$$(mktemp -d); DESSEN_FS_ROOT=$$tmp build/dessen build/captest.bin; rc=$$?; rm -rf $$tmp; test $$rc -eq 0 && echo 'captest: PASS'
 	@nr=$$(mktemp -d); fs=$$(mktemp -d); mkdir -p $$nr/example.test; \
 	  printf 'hello world' > $$nr/example.test/hello; \

@@ -21,7 +21,7 @@ enum class State : uint8_t {
 
 // What a launcher/home app asked the host to open (see State::Launch). The host
 // opens the screen and tears the app down; the app does not resume.
-enum class Launch : uint8_t { None, Reader, Settings, Browser, Home };
+enum class Launch : uint8_t { None, Reader, Settings, Browser, Home, App };
 
 class Services;
 

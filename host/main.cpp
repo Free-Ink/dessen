@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
       } else {
         const char* k = host.launch() == dessen::Launch::Reader     ? "reader"
                         : host.launch() == dessen::Launch::Settings ? "settings"
+                        : host.launch() == dessen::Launch::App      ? "app"
                                                                     : "browser";
         printf("[launch %s %s]\n", k, host.launchPath());
       }

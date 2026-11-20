@@ -45,6 +45,7 @@ pub const DSN_SYS_ACCEL: usize = 84;
 pub const DSN_SYS_OPEN_BOOK: usize = 96;
 pub const DSN_SYS_OPEN_SETTINGS: usize = 97;
 pub const DSN_SYS_OPEN_BROWSER: usize = 98;
+pub const DSN_SYS_OPEN_APP: usize = 102;
 pub const DSN_SYS_RECENTS: usize = 99;
 pub const DSN_SYS_RECENT_SHELF: usize = 104;
 pub const DSN_SYS_BOOK_PROGRESS: usize = 100;
@@ -250,6 +251,8 @@ pub fn dsn_open_book(path: &[u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_OPEN_BOOK,
 pub fn dsn_open_settings() -> i32 { unsafe { dsn_call0(DSN_SYS_OPEN_SETTINGS) } }
 #[inline]
 pub fn dsn_open_browser() -> i32 { unsafe { dsn_call0(DSN_SYS_OPEN_BROWSER) } }
+#[inline]
+pub fn dsn_open_app(path: &[u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_OPEN_APP, path.as_ptr() as usize, path.len()) } }
 #[inline]
 pub fn dsn_recents(list: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_RECENTS, list.as_mut_ptr() as usize, list.len()) } }
 #[inline]

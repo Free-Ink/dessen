@@ -298,6 +298,11 @@ appears once. Without an index, Home still shows recently opened books.
 The firmware launches any plugin folder that contains an `app.bin`. Holding
 **Back** quits back to the menu.
 
+A home-launcher app can offer **shortcuts to other dessen apps**: call
+`dsn_open_app(path, len)` with a plugin's `/plugins/<name>/app.bin`. It opens
+that app full-screen (like `dsn_open_book` opens the reader); when the app exits,
+the firmware returns to your launcher. See the `Dice` entry in `apps/minimal.c`.
+
 > The firmware side lives behind `-DCROSSPOINT_DESSEN_APPS` and is **off by
 > default**. The device must be running a CrossPoint build with it enabled (see
 > the `feat/dessen-apps` branch and the `[dessen_apps]` section in its

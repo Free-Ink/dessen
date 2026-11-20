@@ -85,6 +85,7 @@
 96 open_book(buf path) -> i32      : return self.requestLaunch(1, path, path_len);
 97 open_settings() -> i32          : return self.requestLaunch(2, 0, 0);
 98 open_browser() -> i32           : return self.requestLaunch(3, 0, 0);
+102 open_app(buf path) -> i32      : return self.requestLaunch(4, path, path_len);
 99 recents(out list) -> i32        : result = self.services() ? self.services()->recents(reinterpret_cast<char*>(list), list_len) : DSN_ERR_UNAVAILABLE;
 104 recent_shelf(u32 first, u16 count, out list) -> i32 : if (count > DSN_SHELF_PAGE_MAX) result = DSN_ERR_INVALID; else if (self.services()) result = self.services()->recentShelf(first, count, reinterpret_cast<char*>(list), list_len); else result = DSN_ERR_UNAVAILABLE;
 100 book_progress(buf path) -> i32 : result = svcProgress(self, path, path_len);

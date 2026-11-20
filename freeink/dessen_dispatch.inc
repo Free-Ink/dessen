@@ -523,6 +523,16 @@ case 98: { // open_browser
   a[0] = result;
   break;
 }
+case 102: { // open_app
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  return self.requestLaunch(4, path, path_len);
+  a[0] = result;
+  break;
+}
 case 99: { // recents
   const uint32_t list_len = a[1];
   uint8_t* list = static_cast<uint8_t*>(dvm_ptr(vm, a[0], list_len));
