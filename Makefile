@@ -148,7 +148,8 @@ rust: build/hello_rs.bin build/readstats.bin build/dessen
 	@fs=$$(mktemp -d); net=$$(mktemp -d); api=$$net/sync.test/api/v1/stats/sessions; \
 	  mkdir -p $$fs/.crosspoint $$api; \
 	  printf '{"username":"reader","password_obf":"","serverUrl":"https://sync.test/"}' > $$fs/.crosspoint/koreader.json; \
-	  printf '{"path":"/api/v1/stats/sessions/export?export_token=t"}' > $$api/export-link; \
+	  tz=$$(python3 -c 'import time; print(-time.localtime().tm_gmtoff // 60)'); \
+	  printf '{"path":"/api/v1/stats/sessions/export?export_token=t","sessions":32}' > "$$api/export-link?tz=$$tz"; \
 	  python3 tools/readstats_fixture.py $$net; mv $$net/.crosspoint/reading_sessions.jsonl "$$api/export?export_token=t"; \
 	  out=$$(printf 'csecret\nb' | DESSEN_FS_ROOT=$$fs DESSEN_NET_ROOT=$$net build/dessen build/readstats.bin); \
 	  test -s $$fs/.crosspoint/reading_sessions.jsonl; rc=$$?; rm -rf $$fs $$net; \

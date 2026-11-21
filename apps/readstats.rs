@@ -209,10 +209,10 @@ impl Sync {
 }
 
 // Downloads the account's history (crosspoint-sync GET /api/v1/stats/sessions/export) into the
-// empty log. `show` puts a progress line on screen. Err holds what to tell the reader; empty when
-// the password prompt was cancelled.
+// empty log, dated in the zone `tz` minutes behind UTC (JavaScript's getTimezoneOffset). `show` puts a
+// progress line on screen. Err holds what to tell the reader, empty when the password prompt was cancelled.
 #[inline(never)] // its buffers stay off main's frame
-fn import(sync: &Sync, show: &dyn Fn(&[u8])) -> Result<(), &'static [u8]> {
+fn import(sync: &Sync, tz: i32, show: &dyn Fn(&[u8])) -> Result<(), &'static [u8]> {
     let user = &sync.user[..sync.nu];
     let base = &sync.base[..sync.nb];
     let (mut prompt, mut np) = ([0u8; 100], 0);
@@ -233,7 +233,8 @@ fn import(sync: &Sync, show: &dyn Fn(&[u8])) -> Result<(), &'static [u8]> {
     }
     // The server takes the typed password as the key, like other kosync clients that send it.
     let (mut head, mut nh) = ([0u8; 1024], 0);
-    let ok = [b"GET " as &[u8], base, b"/api/v1/stats/sessions/export-link\nx-auth-user: ", user, b"\nx-auth-key: ", pw, b"\n"]
+    let tz = S::new().s(if tz < 0 { b"-" } else { b"" }).n(tz.unsigned_abs());
+    let ok = [b"GET " as &[u8], base, b"/api/v1/stats/sessions/export-link?tz=", tz.get(), b"\nx-auth-user: ", user, b"\nx-auth-key: ", pw, b"\n"]
         .iter()
         .all(|part| put(&mut head, &mut nh, part));
     if !ok {
@@ -256,7 +257,15 @@ fn import(sync: &Sync, show: &dyn Fn(&[u8])) -> Result<(), &'static [u8]> {
         Some(np) if status == 200 && np > 0 && put(&mut url, &mut nl, base) && put(&mut url, &mut nl, &path[..np]) => {}
         _ => return Err(b"This sync server can't send reading history yet."),
     }
-    show(b"Downloading your reading history...");
+    if field(body, b"\"sessions\":").is_some() && num(body, b"\"sessions\":") == 0 {
+        return Err(b"There's no reading history on CrossPoint Sync to import yet.");
+    }
+    let estimated = field(body, b"\"estimated\":true").is_some();
+    show(if estimated {
+        b"Downloading your reading history. Time for days synced without it is estimated from pages."
+    } else {
+        b"Downloading your reading history..."
+    });
     // The log is missing or empty here, so writing it whole loses nothing.
     if dsn_fetch_to_sd(&url[..nl], LOG) < 0 {
         return Err(b"The download didn't finish. Try again.");
@@ -886,6 +895,10 @@ pub extern "C" fn main() -> i32 {
     let year = if dsn_clock(&mut c) >= 0 { c[0] as u32 | (c[1] as u32) << 8 } else { 0 };
     let have_clock = year >= 2000 && (1..=12).contains(&c[2]) && (1..=31).contains(&c[3]);
     let today = if have_clock { days_from_civil(year, c[2] as u32, c[3] as u32) } else { 0 };
+    // Minutes behind UTC, from the local clock against Unix time, to the nearest quarter hour.
+    let utc = dsn_time() as i64;
+    let local = today as i64 * 86400 + c[4] as i64 * 3600 + c[5] as i64 * 60 + c[6] as i64;
+    let tz = if have_clock && utc > 0 { (((utc - local) as f32 / 900.0) as i64 * 15).clamp(-840, 720) as i32 } else { 0 };
     let mut st = Stats {
         end: today,
         day: [0; DAYS],
@@ -938,7 +951,7 @@ pub extern "C" fn main() -> i32 {
             let (bx, by, bw, bh) = ui.import_rect();
             let tapped = e & 0xff == 5 && x >= bx && x < bx + bw && y >= by && y < by + bh;
             if offer && page == 0 && (e & 0xff == 1 || tapped) {
-                let result = import(sync.as_ref().unwrap(), &|m: &[u8]| {
+                let result = import(sync.as_ref().unwrap(), tz, &|m: &[u8]| {
                     ui.render(&st, &home, 0, -1, true, m);
                     dsn_refresh();
                 });
