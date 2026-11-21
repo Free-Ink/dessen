@@ -172,6 +172,58 @@ Calls that can fail on bad input (`text_box`, `bitmap`) return `-1`; check it
 during development. The host silently refuses anything out of range — it never
 trusts an app value — so a bug draws nothing rather than corrupting the device.
 
+### Full reference
+
+The table above is the drawing core. The rest are **capabilities** — each
+feature-detectable (it returns `DSN_ERR_UNAVAILABLE` when the host doesn't grant
+it, so you can fall back). The complete list lives in
+[`abi/freeink.api`](../abi/freeink.api) (the source of truth), with per-call host
+behaviour in [`docs/proposed-capabilities.md`](proposed-capabilities.md). By group:
+
+- **Core:** `dsn_time` (Unix seconds), `dsn_clock` (local time struct),
+  `dsn_device_id` (stable printable id), `dsn_random_bytes`,
+  `dsn_locale` (BCP47 UI language code, e.g. `"en"` — for localizing your own strings).
+- **Text input:** `dsn_text_input(prompt, out, len)` — the firmware runs its own
+  on-screen keyboard and hands back the text.
+- **Storage** (the SD card; path rules enforced): `dsn_fs_read`,
+  `dsn_fs_read_at(path, offset, out, len)` (ranged read — for files bigger than
+  app memory), `dsn_fs_write`, `dsn_fs_list`, `dsn_fs_delete`,
+  `dsn_fs_app_dir` (your own plugin folder), `dsn_keystore`.
+- **Network:** `dsn_net_request` (one HTTPS request), `dsn_fetch_to_sd` (stream a
+  URL straight to a file).
+- **Crypto:** `dsn_hash`, `dsn_aes_cbc`, `dsn_rsa_keygen` / `_encrypt` /
+  `_decrypt` / `_sign`, `dsn_pkcs12_parse`.
+- **Board:** `dsn_battery` (percent, with the power state `DSN_PWR_*` in the 2nd
+  byte), `dsn_backlight` / `dsn_backlight_get`, `dsn_haptic`, `dsn_accel`.
+- **Launcher / home:** `dsn_open_book`, `dsn_open_app`, `dsn_open_settings`,
+  `dsn_open_browser`, `dsn_open_home(DSN_HOME_*)`, `dsn_recents`,
+  `dsn_recent_shelf`, `dsn_book_progress`, `dsn_book_cover`, `dsn_wifi_connect`.
+
+Text input, network, and key generation are **async**, but they look synchronous
+to your app: the firmware parks the VM while the work runs and resumes you with
+the result — just read the return value.
+
+### Reading stats
+
+The firmware keeps an append-only log of measured reading sessions at
+`/.crosspoint/reading_sessions.jsonl` — **one JSON object per line**:
+
+| key | meaning |
+|---|---|
+| `doc` | 32-hex sync document id of the book |
+| `start` | Unix time of the first counted page |
+| `secs` | active reading seconds |
+| `tz` | UTC offset in minutes at `start` |
+| `from` / `to` | whole-book progress in basis points (0..10000) |
+
+The log is never trimmed, so **stream it with `dsn_fs_read_at`** a chunk at a
+time — never load it whole, it outgrows the 64 KB app memory. Parse line by line;
+a plain substring search for `"key":` is sound (quotes inside strings are
+escaped). Aggregate into per-day seconds (a heatmap), per-hour, streaks, pages,
+etc. The full worked example is [`apps/readstats.rs`](../apps/readstats.rs) — a
+Rust home launcher that renders heatmap + bar-chart cards. (The schema is owned
+by crosspoint `src/sync/ReadingSessionLog.h`.)
+
 ## Laying out a screen
 
 The firmware's fonts and components give you the device's look for free, but a
