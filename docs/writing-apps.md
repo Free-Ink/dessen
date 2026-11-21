@@ -330,6 +330,15 @@ in all three languages, with the ABI's arg-packing handled for you:
   `@import` the `dsn` module (`sdk/dessen.zig`), then `dsn.clear()`, `dsn.text_box(…)`.
   `make zig` (one-time: install Zig).
 
+`make sd` stages these too (as `hello_rs/` and `hello_zig/`, with manifests
+from `apps/hello_rs.json` and `apps/hello_zig.json`) whenever the matching
+toolchain is installed, and skips them otherwise. To choose explicitly, pass
+`make sd SD_LANG_APPS="hello_rs"`, or `SD_LANG_APPS=""` for C only.
+
+The output is the same kind of image as a C app: RV32IM code for the dessen VM,
+not for the reader's chip. One `app.bin` runs on every board, ESP32-C3 (RISC-V)
+and ESP32-S3 (Xtensa) alike. Only the firmware is built per chip.
+
 Freestanding **C++** works the same way. The one hard rule: target plain `im`,
 never `imc` — the VM only decodes 32-bit instructions, so a compressed
 instruction faults immediately.

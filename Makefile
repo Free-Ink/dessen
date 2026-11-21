@@ -8,6 +8,12 @@ APPFLAGS = -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -mno-relax \
 APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal
 SD_APPS = hello lightsout dice sudoku home minimal
 
+# Rust/Zig examples join `make sd` when their toolchain is installed (Rust also
+# needs the riscv32im target). Override with SD_LANG_APPS="" or "hello_rs".
+HAVE_RUST := $(shell rustup target list --installed 2>/dev/null | grep -qx riscv32im-unknown-none-elf && echo y)
+HAVE_ZIG := $(shell command -v zig >/dev/null 2>&1 && echo y)
+SD_LANG_APPS ?= $(if $(HAVE_RUST),hello_rs) $(if $(HAVE_ZIG),hello_zig)
+
 # FreeInk SDK checkout, used read-only for its UI headers.
 FREEINK_SDK ?= ../freeink-sdk
 
@@ -80,8 +86,8 @@ test: all
 	@echo PASS
 
 # Plugin folders ready to copy into /plugins on the SD card.
-sd: all
-	@for a in $(SD_APPS); do mkdir -p build/sd/plugins/$$a && cp build/$$a.bin build/sd/plugins/$$a/app.bin \
+sd: all $(SD_LANG_APPS:%=build/%.bin)
+	@for a in $(SD_APPS) $(SD_LANG_APPS); do mkdir -p build/sd/plugins/$$a && cp build/$$a.bin build/sd/plugins/$$a/app.bin \
 	  && cp apps/$$a.json build/sd/plugins/$$a/manifest.json; done; ls build/sd/plugins
 
 # Report FreeInk SDK surface that dessen does not yet expose, and SDK pin drift.
