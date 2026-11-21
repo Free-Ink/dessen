@@ -326,6 +326,10 @@ in all three languages, with the ABI's arg-packing handled for you:
 - [`apps/hello.rs`](../apps/hello.rs) — **Rust** (`#![no_std]`, no allocator).
   `include!("../sdk/dessen.rs")`, then call `dsn_clear()`, `dsn_text_box(…)`, …
   `make rust` (one-time: `rustup target add riscv32im-unknown-none-elf`).
+- [`apps/readstats.rs`](../apps/readstats.rs) — a full Rust app: reading-stats
+  cards (heatmap, bar charts) from the firmware's session log, streamed with
+  `dsn_fs_read_at` because the log outgrows app memory. Any `apps/<name>.rs`
+  builds with `make build/<name>.bin`.
 - [`apps/hello.zig`](../apps/hello.zig) — **Zig** (freestanding, no std).
   `@import` the `dsn` module (`sdk/dessen.zig`), then `dsn.clear()`, `dsn.text_box(…)`.
   `make zig` (one-time: install Zig).

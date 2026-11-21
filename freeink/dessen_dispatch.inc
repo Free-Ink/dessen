@@ -309,6 +309,22 @@ case 53: { // keystore
   a[0] = result;
   break;
 }
+case 54: { // fs_read_at
+  const uint32_t path_len = a[1];
+  const uint8_t* path = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], path_len));
+  (void)path_len;
+  if (!path) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t offset = static_cast<uint32_t>(a[2]); (void)offset;
+  const uint32_t data_len = a[4];
+  uint8_t* data = static_cast<uint8_t*>(dvm_ptr(vm, a[3], data_len));
+  (void)data_len;
+  const uint32_t data_addr = a[3]; (void)data_addr;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcFs(self, 'R', path, path_len, data, data_len, offset, 0);
+  a[0] = result;
+  break;
+}
 case 56: { // net_request
   const uint32_t head_len = a[1];
   const uint8_t* head = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], head_len));

@@ -23,6 +23,7 @@ class DesktopServices : public Services {
   int locale(char* out, uint32_t cap) override;
   // storage
   int fsRead(const char* path, uint8_t* out, uint32_t cap) override;
+  int fsReadAt(const char* path, uint32_t offset, uint8_t* out, uint32_t cap) override;
   int fsWrite(const char* path, const uint8_t* data, uint32_t n) override;
   int fsList(const char* path, char* out, uint32_t cap) override;
   int fsDelete(const char* path) override;

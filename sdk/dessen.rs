@@ -29,6 +29,7 @@ pub const DSN_SYS_FS_WRITE: usize = 50;
 pub const DSN_SYS_FS_DELETE: usize = 51;
 pub const DSN_SYS_FS_APP_DIR: usize = 52;
 pub const DSN_SYS_KEYSTORE: usize = 53;
+pub const DSN_SYS_FS_READ_AT: usize = 54;
 pub const DSN_SYS_NET_REQUEST: usize = 56;
 pub const DSN_SYS_FETCH_TO_SD: usize = 57;
 pub const DSN_SYS_HASH: usize = 64;
@@ -220,6 +221,8 @@ pub fn dsn_fs_delete(path: &[u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_FS_DELETE,
 pub fn dsn_fs_app_dir(path: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_FS_APP_DIR, path.as_mut_ptr() as usize, path.len()) } }
 #[inline]
 pub fn dsn_keystore(path: &[u8], key: &[u8], expires: u32) -> i32 { unsafe { dsn_call5(DSN_SYS_KEYSTORE, path.as_ptr() as usize, path.len(), key.as_ptr() as usize, key.len(), expires as usize) } }
+#[inline]
+pub fn dsn_fs_read_at(path: &[u8], offset: u32, data: &mut [u8]) -> i32 { unsafe { dsn_call5(DSN_SYS_FS_READ_AT, path.as_ptr() as usize, path.len(), offset as usize, data.as_mut_ptr() as usize, data.len()) } }
 #[inline]
 pub fn dsn_net_request(head: &[u8], body: &[u8], resp: &mut [u8]) -> i32 { unsafe { dsn_call6(DSN_SYS_NET_REQUEST, head.as_ptr() as usize, head.len(), body.as_ptr() as usize, body.len(), resp.as_mut_ptr() as usize, resp.len()) } }
 #[inline]

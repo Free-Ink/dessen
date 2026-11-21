@@ -121,9 +121,34 @@ build/hello_rs.bin: apps/hello.rs sdk/dessen.rs sdk/crt0.S sdk/app.ld sdk/dessen
 	    -Wl,--gc-sections,--no-warn-rwx-segments
 	$(RISCV)objcopy -O binary build/hello_rs.elf $@
 
-rust: build/hello_rs.bin build/dessen
+# Any other Rust app: apps/<name>.rs -> build/<name>.bin (same recipe as above).
+build/readstats.bin: apps/readstats_icons.rs
+
+build/%.bin: apps/%.rs sdk/crt0.S sdk/app.ld sdk/dessen_abi.h $(GEN)
+	@mkdir -p build
+	rustc --target riscv32im-unknown-none-elf --crate-type staticlib \
+	    -C panic=abort -C opt-level=s -o build/lib$*.a $<
+	$(RISCV)gcc -march=rv32im -mabi=ilp32 -nostdlib -mno-relax -Isdk -ffunction-sections \
+	    -T sdk/app.ld sdk/crt0.S build/lib$*.a -o build/$*.elf \
+	    -Wl,--gc-sections,--no-warn-rwx-segments
+	$(RISCV)objcopy -O binary build/$*.elf $@
+
+# readstats is checked against a generated session log (tools/readstats_fixture.py),
+# then staged next to the `make sd` plugins.
+rust: build/hello_rs.bin build/readstats.bin build/dessen
 	printf 'c' | build/dessen build/hello_rs.bin | grep -q 'Hello from Rust on dessen'
-	@echo "rust app: PASS"
+	@fs=$$(mktemp -d); python3 tools/readstats_fixture.py $$fs; \
+	  out=$$(printf nnnnnnnnnnbb | DESSEN_FS_ROOT=$$fs build/dessen build/readstats.bin); rc=$$?; rm -rf $$fs; \
+	  test $$rc -eq 0 || { echo "readstats: exit $$rc"; exit 1; }; \
+	  for want in ' 30m$$' ' 45m$$' ' 2 days$$' ' 5h 45m$$' ' 32$$' ' 5h 30m$$' ' Dune$$' ' The "Left" Hand$$' ' 1\.6$$' ' Continue reading$$' ' Settings$$'; do \
+	    echo "$$out" | grep -q -- "$$want" || { echo "readstats: missing '$$want'"; echo "$$out"; exit 1; }; done; \
+	  empty=$$(mktemp -d); printf b | DESSEN_FS_ROOT=$$empty build/dessen build/readstats.bin | grep -q 'No reading sessions yet'; rc=$$?; \
+	  rm -rf $$empty; test $$rc -eq 0 || { echo "readstats: no empty state"; exit 1; }
+	printf c | build/dessen build/readstats.bin | grep -q 'launch reader /books/dune.epub'
+	printf nnc | build/dessen build/readstats.bin | grep -q 'launch home 0'
+	@mkdir -p build/sd/plugins/readstats && cp build/readstats.bin build/sd/plugins/readstats/app.bin \
+	  && cp apps/readstats.json build/sd/plugins/readstats/manifest.json
+	@echo "rust apps: PASS"
 
 # Same proof in Zig. Not part of `test` (needs the Zig toolchain). Run: make zig
 build/hello_zig.bin: apps/hello.zig sdk/dessen.zig sdk/crt0.S sdk/app.ld sdk/dessen_abi.h

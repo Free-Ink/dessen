@@ -29,6 +29,8 @@ class Services {
 
   // ---- storage (synchronous) ----  return bytes produced, or a DSN_ERR_*
   virtual int fsRead(const char*, uint8_t*, uint32_t) { return -4; }
+  // Up to `cap` bytes starting at `offset`; 0 at or past the end of the file.
+  virtual int fsReadAt(const char*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int fsWrite(const char*, const uint8_t*, uint32_t) { return -4; }
   virtual int fsList(const char*, char*, uint32_t) { return -4; }
   virtual int fsDelete(const char*) { return -4; }

@@ -211,6 +211,21 @@ int DesktopServices::fsRead(const char* path, uint8_t* out, uint32_t cap) {
   return result < 0 ? result : give(data.data(), data.size(), out, cap);
 }
 
+int DesktopServices::fsReadAt(const char* path, uint32_t offset, uint8_t* out, uint32_t cap) {
+  if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
+  if (!*path || path[strlen(path) - 1] == '/') return DSN_ERR_IO;
+  std::string leaf;
+  const Fd dir{openParent(fsRoot_, path, leaf)};
+  if (dir.value < 0) return DSN_ERR_IO;
+  FILE* file = openRegular(dir.value, leaf.c_str());
+  if (!file) return DSN_ERR_IO;
+  const bool sought = fseek(file, static_cast<long>(offset), SEEK_SET) == 0;
+  const size_t n = sought ? fread(out, 1, cap, file) : 0;
+  const bool ok = sought && !ferror(file);
+  fclose(file);
+  return ok ? static_cast<int>(n) : DSN_ERR_IO;
+}
+
 int DesktopServices::fsWrite(const char* path, const uint8_t* data, uint32_t n) {
   if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;
   return replaceFile(fsRoot_, path, [&](FILE* file) {

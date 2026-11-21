@@ -29,6 +29,7 @@ pub const DSN_SYS_FS_WRITE: usize = 50;
 pub const DSN_SYS_FS_DELETE: usize = 51;
 pub const DSN_SYS_FS_APP_DIR: usize = 52;
 pub const DSN_SYS_KEYSTORE: usize = 53;
+pub const DSN_SYS_FS_READ_AT: usize = 54;
 pub const DSN_SYS_NET_REQUEST: usize = 56;
 pub const DSN_SYS_FETCH_TO_SD: usize = 57;
 pub const DSN_SYS_HASH: usize = 64;
@@ -159,6 +160,7 @@ pub fn fs_write(path: []const u8, data: []const u8) i32 { return call4(DSN_SYS_F
 pub fn fs_delete(path: []const u8) i32 { return call2(DSN_SYS_FS_DELETE, @intFromPtr(path.ptr), path.len); }
 pub fn fs_app_dir(path: []u8) i32 { return call2(DSN_SYS_FS_APP_DIR, @intFromPtr(path.ptr), path.len); }
 pub fn keystore(path: []const u8, key: []const u8, expires: u32) i32 { return call5(DSN_SYS_KEYSTORE, @intFromPtr(path.ptr), path.len, @intFromPtr(key.ptr), key.len, @as(usize, expires)); }
+pub fn fs_read_at(path: []const u8, offset: u32, data: []u8) i32 { return call5(DSN_SYS_FS_READ_AT, @intFromPtr(path.ptr), path.len, @as(usize, offset), @intFromPtr(data.ptr), data.len); }
 pub fn net_request(head: []const u8, body: []const u8, resp: []u8) i32 { return call6(DSN_SYS_NET_REQUEST, @intFromPtr(head.ptr), head.len, @intFromPtr(body.ptr), body.len, @intFromPtr(resp.ptr), resp.len); }
 pub fn fetch_to_sd(url: []const u8, dest: []const u8) i32 { return call4(DSN_SYS_FETCH_TO_SD, @intFromPtr(url.ptr), url.len, @intFromPtr(dest.ptr), dest.len); }
 pub fn hash(algo: i32, data: []const u8, digest: []u8) i32 { return call5(DSN_SYS_HASH, @as(usize, (@as(u32, @bitCast(algo)) & 0xff)), @intFromPtr(data.ptr), data.len, @intFromPtr(digest.ptr), digest.len); }

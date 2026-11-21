@@ -201,15 +201,16 @@ int svcDeviceId(FreeInkHost& self, uint8_t* out, uint32_t cap) {
 }
 
 // One entry for every storage op; `mode` picks it. `out`/`outLen` is the app's
-// output buffer (read buffer for 'w'/'k'); `expires` only used by 'k'.
+// output buffer (read buffer for 'w'/'k'); `offset` only used by 'R', `expires` by 'k'.
 int svcFs(FreeInkHost& self, char mode, const uint8_t* path, uint32_t pathLen, uint8_t* out, uint32_t outLen,
-          uint32_t, uint32_t expires) {
+          uint32_t offset, uint32_t expires) {
   Services* s = svc(self);
   if (!s) return DSN_ERR_UNAVAILABLE;
   char pbuf[kPathMax + 1];
   if (mode != 'a' && !guestPath(path, pathLen, pbuf)) return DSN_ERR_INVALID;
   switch (mode) {
     case 'r': return s->fsRead(pbuf, out, outLen);
+    case 'R': return s->fsReadAt(pbuf, offset, out, outLen);
     case 'w': return s->fsWrite(pbuf, out, outLen);
     case 'l': return s->fsList(pbuf, reinterpret_cast<char*>(out), outLen);
     case 'd': return s->fsDelete(pbuf);

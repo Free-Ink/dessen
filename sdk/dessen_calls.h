@@ -100,6 +100,7 @@ static inline int dsn_fs_write(const void *path, int path_len, const void *data,
 static inline int dsn_fs_delete(const void *path, int path_len) { return (int)dsn_call2(DSN_SYS_FS_DELETE, (long)path, path_len); }
 static inline int dsn_fs_app_dir(void *path, int path_len) { return (int)dsn_call2(DSN_SYS_FS_APP_DIR, (long)path, path_len); }
 static inline int dsn_keystore(const void *path, int path_len, const void *key, int key_len, unsigned expires) { return (int)dsn_call5(DSN_SYS_KEYSTORE, (long)path, path_len, (long)key, key_len, (long)expires); }
+static inline int dsn_fs_read_at(const void *path, int path_len, unsigned offset, void *data, int data_len) { return (int)dsn_call5(DSN_SYS_FS_READ_AT, (long)path, path_len, (long)offset, (long)data, data_len); }
 static inline int dsn_net_request(const void *head, int head_len, const void *body, int body_len, void *resp, int resp_len) { return (int)dsn_call6(DSN_SYS_NET_REQUEST, (long)head, head_len, (long)body, body_len, (long)resp, resp_len); }
 static inline int dsn_fetch_to_sd(const void *url, int url_len, const void *dest, int dest_len) { return (int)dsn_call4(DSN_SYS_FETCH_TO_SD, (long)url, url_len, (long)dest, dest_len); }
 static inline int dsn_hash(int algo, const void *data, int data_len, void *digest, int digest_len) { return (int)dsn_call5(DSN_SYS_HASH, (long)(((unsigned)algo & 0xff)), (long)data, data_len, (long)digest, digest_len); }

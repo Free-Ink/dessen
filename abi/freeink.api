@@ -60,6 +60,8 @@
 51 fs_delete(buf path) -> i32            : result = svcFs(self, 'd', path, path_len, 0, 0, 0, 0);
 52 fs_app_dir(out path) -> i32           : result = svcFs(self, 'a', 0, 0, path, path_len, 0, 0);
 53 keystore(buf path, buf key, u32 expires) -> i32 : result = svcFs(self, 'k', path, path_len, (uint8_t*)key, key_len, 0, expires);
+# Ranged read for files larger than app memory: up to data_len bytes from offset; 0 at end of file.
+54 fs_read_at(buf path, u32 offset, out data) -> i32 : result = svcFs(self, 'R', path, path_len, data, data_len, offset, 0);
 
 # --- network (56-63), async ---
 56 net_request(buf head, buf body, out resp) -> i32 : return self.beginNet(head, head_len, body, body_len, resp, resp_len);
