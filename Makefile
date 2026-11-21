@@ -144,6 +144,16 @@ rust: build/hello_rs.bin build/readstats.bin build/dessen
 	    echo "$$out" | grep -q -- "$$want" || { echo "readstats: missing '$$want'"; echo "$$out"; exit 1; }; done; \
 	  empty=$$(mktemp -d); printf b | DESSEN_FS_ROOT=$$empty build/dessen build/readstats.bin | grep -q 'No reading sessions yet'; rc=$$?; \
 	  rm -rf $$empty; test $$rc -eq 0 || { echo "readstats: no empty state"; exit 1; }
+	@# Import: an empty reader with a sync account downloads its history (fixture server: sync.test).
+	@fs=$$(mktemp -d); net=$$(mktemp -d); api=$$net/sync.test/api/v1/stats/sessions; \
+	  mkdir -p $$fs/.crosspoint $$api; \
+	  printf '{"username":"reader","password_obf":"","serverUrl":"https://sync.test/"}' > $$fs/.crosspoint/koreader.json; \
+	  printf '{"path":"/api/v1/stats/sessions/export?export_token=t"}' > $$api/export-link; \
+	  python3 tools/readstats_fixture.py $$net; mv $$net/.crosspoint/reading_sessions.jsonl "$$api/export?export_token=t"; \
+	  out=$$(printf 'csecret\nb' | DESSEN_FS_ROOT=$$fs DESSEN_NET_ROOT=$$net build/dessen build/readstats.bin); \
+	  test -s $$fs/.crosspoint/reading_sessions.jsonl; rc=$$?; rm -rf $$fs $$net; \
+	  echo "$$out" | grep -q 'Import from CrossPoint Sync' && echo "$$out" | grep -q -- ' 5h 45m$$' && test $$rc -eq 0 \
+	    || { echo "readstats: import failed"; echo "$$out"; exit 1; }
 	printf c | build/dessen build/readstats.bin | grep -q 'launch reader /books/dune.epub'
 	printf nnc | build/dessen build/readstats.bin | grep -q 'launch home 0'
 	@mkdir -p build/sd/plugins/readstats && cp build/readstats.bin build/sd/plugins/readstats/app.bin \

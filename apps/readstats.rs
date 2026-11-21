@@ -41,6 +41,10 @@ const BOLD: i32 = 1;
 const ERR_UNAVAILABLE: i32 = -4;
 
 const LOG: &[u8] = b"/.crosspoint/reading_sessions.jsonl";
+// The firmware's sync settings (crosspoint-reader lib/KOReaderSync/KOReaderCredentialStore): the
+// server and username are plain JSON there; the password is not, so the reader types it.
+const SYNC: &[u8] = b"/.crosspoint/koreader.json";
+const DEFAULT_SYNC: &[u8] = b"https://sync.crosspointreader.com";
 const DAYS: usize = 53 * 7; // heatmap history, newest last
 const NBOOKS: usize = 64;
 const G: i32 = 28; // side gutter
@@ -48,7 +52,6 @@ const PAD: i32 = 12; // card padding
 const GAP: i32 = 12; // between cards
 const WIDGETS: usize = 6;
 const STATUS_Y: i32 = 10; // top of the clock / battery line
-const COVER_MAX: i32 = 240;
 // Launcher grid, in TILES order: label, open_home destination (DSN_HOME_*).
 const APPS: [(&[u8], i32); 6] =
     [(b"Library", 1), (b"Files", 0), (b"OPDS", 3), (b"Plugins", 2), (b"Transfer", 4), (b"Settings", 5)];
@@ -138,7 +141,138 @@ fn num(line: &[u8], key: &[u8]) -> i64 {
     if neg { -n } else { n }
 }
 
+// Appends `s` to out[..*n]; false (out unchanged) when it doesn't fit.
+fn put(out: &mut [u8], n: &mut usize, s: &[u8]) -> bool {
+    let end = *n + s.len();
+    if end > out.len() {
+        return false;
+    }
+    out[*n..end].copy_from_slice(s);
+    *n = end;
+    true
+}
+
+// The JSON string after `key` (`"name":`, spaces allowed), with \" and \\ unescaped, into out.
+fn json_str(src: &[u8], key: &[u8], out: &mut [u8]) -> Option<usize> {
+    let mut v = field(src, key)?;
+    while let [b' ' | b'\t' | b'\r' | b'\n', rest @ ..] = v {
+        v = rest;
+    }
+    let [b'"', rest @ ..] = v else { return None };
+    let (mut n, mut it) = (0, rest.iter());
+    while let Some(&c) = it.next() {
+        let c = match c {
+            b'"' => return Some(n),
+            b'\\' => *it.next()?,
+            c => c,
+        };
+        *out.get_mut(n)? = c;
+        n += 1;
+    }
+    None
+}
+
+// The CrossPoint Sync account set up on this reader, if any.
+struct Sync {
+    base: [u8; 256],
+    nb: usize,
+    user: [u8; 64],
+    nu: usize,
+}
+
+impl Sync {
+    #[inline(never)]
+    fn load() -> Option<Sync> {
+        let mut buf = [0u8; 2048];
+        let n = dsn_fs_read(SYNC, &mut buf);
+        if n <= 0 {
+            return None;
+        }
+        let src = &buf[..n as usize];
+        let mut s = Sync { base: [0; 256], nb: 0, user: [0; 64], nu: 0 };
+        s.nu = json_str(src, b"\"username\":", &mut s.user).filter(|&n| n > 0)?;
+        let mut raw = [0u8; 200];
+        let nr = json_str(src, b"\"serverUrl\":", &mut raw).unwrap_or(0);
+        let url = &raw[..nr];
+        // KOReaderCredentialStore::getBaseUrl: the default server, http:// when no scheme, no trailing slash.
+        let ok = match url {
+            [] => put(&mut s.base, &mut s.nb, DEFAULT_SYNC),
+            u if u.windows(3).any(|w| w == b"://") => put(&mut s.base, &mut s.nb, u),
+            u => put(&mut s.base, &mut s.nb, b"http://") && put(&mut s.base, &mut s.nb, u),
+        };
+        while s.nb > 0 && s.base[s.nb - 1] == b'/' {
+            s.nb -= 1;
+        }
+        if ok { Some(s) } else { None }
+    }
+}
+
+// Downloads the account's history (crosspoint-sync GET /api/v1/stats/sessions/export) into the
+// empty log. `show` puts a progress line on screen. Err holds what to tell the reader; empty when
+// the password prompt was cancelled.
+#[inline(never)] // its buffers stay off main's frame
+fn import(sync: &Sync, show: &dyn Fn(&[u8])) -> Result<(), &'static [u8]> {
+    let user = &sync.user[..sync.nu];
+    let base = &sync.base[..sync.nb];
+    let (mut prompt, mut np) = ([0u8; 100], 0);
+    put(&mut prompt, &mut np, b"CrossPoint Sync password for ");
+    put(&mut prompt, &mut np, user);
+    let mut pw = [0u8; 128];
+    let n = dsn_text_input(&prompt[..np], &mut pw);
+    if n <= 0 {
+        return Err(b"");
+    }
+    let pw = &pw[..(n as usize).min(pw.len())];
+    if pw.iter().any(|&c| c < 32 || c == 127) {
+        return Err(b"That password can't be sent from here.");
+    }
+    show(b"Connecting...");
+    if dsn_wifi_connect() < 0 {
+        return Err(b"Couldn't connect to Wi-Fi.");
+    }
+    // The server takes the typed password as the key, like other kosync clients that send it.
+    let (mut head, mut nh) = ([0u8; 1024], 0);
+    let ok = [b"GET " as &[u8], base, b"/api/v1/stats/sessions/export-link\nx-auth-user: ", user, b"\nx-auth-key: ", pw, b"\n"]
+        .iter()
+        .all(|part| put(&mut head, &mut nh, part));
+    if !ok {
+        return Err(b"These sync settings are too long to use here.");
+    }
+    let mut resp = [0u8; 1024];
+    let n = dsn_net_request(&head[..nh], b"", &mut resp);
+    if n < 0 {
+        return Err(b"Couldn't reach CrossPoint Sync.");
+    }
+    let status = (resp[0] as u32) << 8 | resp[1] as u32;
+    if status == 401 {
+        return Err(b"Wrong password.");
+    }
+    let from = (4 + ((resp[2] as usize) << 8 | resp[3] as usize)).min(resp.len());
+    let body = &resp[from..(from + n as usize).min(resp.len())];
+    let (mut url, mut nl) = ([0u8; 768], 0);
+    let mut path = [0u8; 512];
+    match json_str(body, b"\"path\":", &mut path) {
+        Some(np) if status == 200 && np > 0 && put(&mut url, &mut nl, base) && put(&mut url, &mut nl, &path[..np]) => {}
+        _ => return Err(b"This sync server can't send reading history yet."),
+    }
+    show(b"Downloading your reading history...");
+    // The log is missing or empty here, so writing it whole loses nothing.
+    if dsn_fetch_to_sd(&url[..nl], LOG) < 0 {
+        return Err(b"The download didn't finish. Try again.");
+    }
+    Ok(())
+}
+
 impl Stats {
+    // Reads the log again from scratch, in place: Stats is too big to copy on the app's stack.
+    fn reload(&mut self, today: u32, have_clock: bool) {
+        self.end = today;
+        self.day.fill(0);
+        self.hour.fill(0);
+        (self.nbooks, self.total, self.sessions, self.progress_bp, self.err) = (0, 0, 0, 0, 0);
+        self.load(have_clock);
+    }
+
     fn shift(&mut self, n: u32) {
         let n = (n as usize).min(DAYS);
         self.day.copy_within(n.., 0);
@@ -536,12 +670,9 @@ impl Ui {
         2 * PAD + (self.ls + self.lb + self.ls + 18).max(92)
     }
 
-    // The card is pinned to the bottom of page 1 and grows into whatever the
-    // widgets above (ending at `end`) leave free, so the cover can be large.
-    fn book_rect(&self, end: i32) -> (i32, i32) {
-        let bottom = self.h - PAD;
-        let h = (bottom - end).clamp(self.book_min(), 2 * PAD + COVER_MAX);
-        (bottom - h, h)
+    // The card is pinned to the bottom of page 1 at one size, the room flow() leaves it: (top, height).
+    fn book_rect(&self) -> (i32, i32) {
+        (self.h - PAD - self.book_min(), self.book_min())
     }
 
     fn book(&self, home: &Home) {
@@ -635,17 +766,31 @@ impl Ui {
         ((p + 1).max(2), end)
     }
 
-    // Draws `page` with app icon `sel` focused (-1 for none); returns the page count.
-    fn render(&self, st: &Stats, home: &Home, page: i32, sel: i32) -> i32 {
+    // The "Import from CrossPoint Sync" button on the empty first page: (x, y, w, h).
+    fn import_rect(&self) -> (i32, i32, i32, i32) {
+        (G, self.top() + 3 * self.lb, self.w - 2 * G, self.lb + 2 * PAD)
+    }
+
+    // Draws `page` with app icon `sel` focused (-1 for none); returns the page count. `offer` shows
+    // the import button on an empty first page, with `note` (progress or an error) below it.
+    fn render(&self, st: &Stats, home: &Home, page: i32, sel: i32, offer: bool, note: &[u8]) -> i32 {
         dsn_clear();
         let (pages, _) = self.flow(st, home, page, true);
         if st.sessions == 0 && page == 0 {
             let msg: &[u8] = if st.err == ERR_UNAVAILABLE {
                 b"Reading stats need newer firmware."
+            } else if offer {
+                b"No reading sessions yet. Read a book, or bring your history from CrossPoint Sync."
             } else {
                 b"No reading sessions yet. Read a book and come back."
             };
-            dsn_text_box(G, self.top(), self.w - 2 * G, 4 * self.lb, msg, BODY, CENTER, 4, 0);
+            dsn_text_box(G, self.top(), self.w - 2 * G, 3 * self.lb, msg, BODY, CENTER, 3, 0);
+            if offer {
+                let (x, y, w, h) = self.import_rect();
+                dsn_stroke(x, y, w, h, BLACK, 3, 16, 15);
+                text(x, y + (h - self.lb) / 2, w, self.lb, b"Import from CrossPoint Sync", BODY, CENTER, BOLD);
+                dsn_text_box(G, y + h + GAP, self.w - 2 * G, 3 * self.ls, note, SMALL, CENTER, 3, 0);
+            }
         }
         if page == 0 && home.has_book() {
             self.book(home);
@@ -690,8 +835,13 @@ fn first_stop(page: i32) -> i32 {
 
 #[no_mangle]
 pub extern "C" fn main() -> i32 {
+    // dsn_clock_t: u16 year, month, day, ... in local time.
+    let mut c = [0u8; 8];
+    let year = if dsn_clock(&mut c) >= 0 { c[0] as u32 | (c[1] as u32) << 8 } else { 0 };
+    let have_clock = year >= 2000 && (1..=12).contains(&c[2]) && (1..=31).contains(&c[3]);
+    let today = if have_clock { days_from_civil(year, c[2] as u32, c[3] as u32) } else { 0 };
     let mut st = Stats {
-        end: 0,
+        end: today,
         day: [0; DAYS],
         hour: [0; 24],
         books: [Book { key: 0, secs: 0, title: [0; 80], tlen: 0 }; NBOOKS],
@@ -701,14 +851,11 @@ pub extern "C" fn main() -> i32 {
         progress_bp: 0,
         err: 0,
     };
-    // dsn_clock_t: u16 year, month, day, ... in local time.
-    let mut c = [0u8; 8];
-    let year = if dsn_clock(&mut c) >= 0 { c[0] as u32 | (c[1] as u32) << 8 } else { 0 };
-    let have_clock = year >= 2000 && (1..=12).contains(&c[2]) && (1..=31).contains(&c[3]);
-    if have_clock {
-        st.end = days_from_civil(year, c[2] as u32, c[3] as u32);
-    }
     st.load(have_clock);
+    // Import only into a missing or empty log: one with any lines is this reader's own history.
+    let sync = if st.sessions == 0 && st.err == 0 && dsn_fs_read_at(LOG, 0, &mut [0u8; 1]) <= 0 { Sync::load() } else { None };
+    let mut offer = sync.is_some();
+    let mut note: &[u8] = b"";
 
     let scr = dsn_screen();
     let ui = Ui {
@@ -731,8 +878,8 @@ pub extern "C" fn main() -> i32 {
     };
     home.load();
     if home.has_book() {
-        home.card = ui.book_rect(ui.flow(&st, &home, 0, false).1);
-        // The cover is as tall as the card allows. Slow the first time (decoded, then cached).
+        home.card = ui.book_rect();
+        // The cover is as tall as the card. Slow the first time (decoded, then cached).
         let n = dsn_book_cover(&home.rec[home.f[0].0..home.f[0].1], home.card.1 - 2 * PAD, &mut home.cover);
         home.cover_n = if n > 4 { (n as usize).min(home.cover.len()) } else { 0 };
     }
@@ -746,11 +893,33 @@ pub extern "C" fn main() -> i32 {
     loop {
         let page = page_of(stop);
         let sel = if home.ring && page == 1 { stop - 1 } else { -1 };
-        let pages = ui.render(&st, &home, page, sel);
+        let pages = ui.render(&st, &home, page, sel, offer, note);
         dsn_refresh();
         let last = first_stop(pages - 1).max(NAPPS); // page 2 is always there, and ends at its last icon
         stop = loop {
             let e = dsn_wait_event();
+            let (x, y) = ((e >> 8 & 0xfff) as i32, (e >> 20 & 0xfff) as i32);
+            // While offered, CONFIRM on page 1 and a tap on the button import (the book card still opens on a tap).
+            let (bx, by, bw, bh) = ui.import_rect();
+            let tapped = e & 0xff == 5 && x >= bx && x < bx + bw && y >= by && y < by + bh;
+            if offer && page == 0 && (e & 0xff == 1 || tapped) {
+                let result = import(sync.as_ref().unwrap(), &|m: &[u8]| {
+                    ui.render(&st, &home, 0, -1, true, m);
+                    dsn_refresh();
+                });
+                match result {
+                    Ok(()) => {
+                        st.reload(today, have_clock);
+                        offer = false;
+                    }
+                    // Cancelled: CONFIRM opens the book again until the next launch.
+                    Err(m) => {
+                        offer = !m.is_empty();
+                        note = m;
+                    }
+                }
+                break 0;
+            }
             // sdk/dessen_abi.h DSN_EV_*; open_* end the app when they succeed.
             let next = match e & 0xff {
                 1 => {
@@ -764,7 +933,6 @@ pub extern "C" fn main() -> i32 {
                 7 | 9 => first_stop((page + 1).min(pages - 1)),   // swipe up / left
                 8 | 10 => first_stop((page - 1).max(0)),          // swipe down / right
                 5 => {
-                    let (x, y) = ((e >> 8 & 0xfff) as i32, (e >> 20 & 0xfff) as i32);
                     let app = if page > 0 { ui.app_at(x, y) } else { None };
                     if let Some(i) = app {
                         open(i as i32 + 1);
