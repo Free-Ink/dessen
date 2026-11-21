@@ -52,6 +52,7 @@ const PAD: i32 = 12; // card padding
 const GAP: i32 = 12; // between cards
 const WIDGETS: usize = 6;
 const STATUS_Y: i32 = 10; // top of the clock / battery line
+const COVER_MAX: i32 = 240;
 // Launcher grid, in TILES order: label, open_home destination (DSN_HOME_*).
 const APPS: [(&[u8], i32); 6] =
     [(b"Library", 1), (b"Files", 0), (b"OPDS", 3), (b"Plugins", 2), (b"Transfer", 4), (b"Settings", 5)];
@@ -670,9 +671,29 @@ impl Ui {
         2 * PAD + (self.ls + self.lb + self.ls + 18).max(92)
     }
 
-    // The card is pinned to the bottom of page 1 at one size, the room flow() leaves it: (top, height).
-    fn book_rect(&self) -> (i32, i32) {
-        (self.h - PAD - self.book_min(), self.book_min())
+    // The card is pinned to the bottom of page 1 and grows into whatever the
+    // content above (ending at `end`) leaves free, so the cover can be large: (top, height).
+    fn book_rect(&self, end: i32) -> (i32, i32) {
+        let bottom = self.h - PAD;
+        let h = (bottom - end).clamp(self.book_min(), 2 * PAD + COVER_MAX);
+        (bottom - h, h)
+    }
+
+    // Where page 1's own content ends, for sizing the book card under it.
+    fn page1_end(&self, st: &Stats, home: &Home, offer: bool) -> i32 {
+        if st.sessions > 0 {
+            self.flow(st, home, 0, false).1
+        } else if offer {
+            let (_, y, _, h) = self.import_rect();
+            y + h + GAP + 3 * self.ls + GAP // the note's lines stay reserved, so an error doesn't move the card
+        } else {
+            self.empty_top() + 3 * self.lb + GAP
+        }
+    }
+
+    // Top of the empty first page's message: clear of the status line.
+    fn empty_top(&self) -> i32 {
+        self.top() + GAP
     }
 
     fn book(&self, home: &Home) {
@@ -768,7 +789,7 @@ impl Ui {
 
     // The "Import from CrossPoint Sync" button on the empty first page: (x, y, w, h).
     fn import_rect(&self) -> (i32, i32, i32, i32) {
-        (G, self.top() + 3 * self.lb, self.w - 2 * G, self.lb + 2 * PAD)
+        (G, self.empty_top() + 3 * self.lb + 2 * GAP, self.w - 2 * G, self.lb + 2 * PAD + 8)
     }
 
     // Draws `page` with app icon `sel` focused (-1 for none); returns the page count. `offer` shows
@@ -784,7 +805,7 @@ impl Ui {
             } else {
                 b"No reading sessions yet. Read a book and come back."
             };
-            dsn_text_box(G, self.top(), self.w - 2 * G, 3 * self.lb, msg, BODY, CENTER, 3, 0);
+            dsn_text_box(G, self.empty_top(), self.w - 2 * G, 3 * self.lb, msg, BODY, CENTER, 3, 0);
             if offer {
                 let (x, y, w, h) = self.import_rect();
                 dsn_stroke(x, y, w, h, BLACK, 3, 16, 15);
@@ -833,6 +854,31 @@ fn first_stop(page: i32) -> i32 {
     }
 }
 
+// Sizes the book card to the room page 1 leaves it, and (re)loads the cover when that height
+// changes: at launch, and when an import fills or dismisses the empty page.
+#[inline(never)]
+fn place_card(ui: &Ui, st: &Stats, home: &mut Home, offer: bool) {
+    if !home.has_book() {
+        return;
+    }
+    let card = ui.book_rect(ui.page1_end(st, home, offer));
+    if card.1 != home.card.1 {
+        // The cover is as tall as the card. Slow the first time (decoded, then cached).
+        let n = dsn_book_cover(&home.rec[home.f[0].0..home.f[0].1], card.1 - 2 * PAD, &mut home.cover);
+        home.cover_n = if n > 4 { (n as usize).min(home.cover.len()) } else { 0 };
+    }
+    home.card = card;
+}
+
+// Opens what focus stop `stop` stands for; open_* end the app when they succeed.
+fn open(home: &Home, stop: i32) -> i32 {
+    match stop {
+        0 if home.has_book() => dsn_open_book(home.field(0)),
+        s if (1..=NAPPS).contains(&s) => dsn_open_home(APPS[s as usize - 1].1),
+        _ => 0,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn main() -> i32 {
     // dsn_clock_t: u16 year, month, day, ... in local time.
@@ -877,18 +923,7 @@ pub extern "C" fn main() -> i32 {
         ring: info[19] != 0,
     };
     home.load();
-    if home.has_book() {
-        home.card = ui.book_rect();
-        // The cover is as tall as the card. Slow the first time (decoded, then cached).
-        let n = dsn_book_cover(&home.rec[home.f[0].0..home.f[0].1], home.card.1 - 2 * PAD, &mut home.cover);
-        home.cover_n = if n > 4 { (n as usize).min(home.cover.len()) } else { 0 };
-    }
-
-    let open = |stop: i32| match stop {
-        0 if home.has_book() => dsn_open_book(home.field(0)),
-        s if (1..=NAPPS).contains(&s) => dsn_open_home(APPS[s as usize - 1].1),
-        _ => 0,
-    };
+    place_card(&ui, &st, &mut home, offer);
     let mut stop = 0;
     loop {
         let page = page_of(stop);
@@ -918,12 +953,13 @@ pub extern "C" fn main() -> i32 {
                         note = m;
                     }
                 }
+                place_card(&ui, &st, &mut home, offer);
                 break 0;
             }
             // sdk/dessen_abi.h DSN_EV_*; open_* end the app when they succeed.
             let next = match e & 0xff {
                 1 => {
-                    open(stop); // CONFIRM
+                    open(&home, stop); // CONFIRM
                     stop
                 }
                 2 if stop == 0 => return 0,                       // BACK on page 1: leave
@@ -935,10 +971,10 @@ pub extern "C" fn main() -> i32 {
                 5 => {
                     let app = if page > 0 { ui.app_at(x, y) } else { None };
                     if let Some(i) = app {
-                        open(i as i32 + 1);
+                        open(&home, i as i32 + 1);
                         stop
                     } else if page == 0 && home.has_book() && y >= home.card.0 {
-                        open(0);
+                        open(&home, 0);
                         stop
                     } else {
                         first_stop((page + 1) % pages) // tap on empty space: next page
