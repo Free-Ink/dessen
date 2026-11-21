@@ -1,7 +1,8 @@
 # dessen
 
-**Run sandboxed apps inside e-paper reader firmware — tiny RISC-V binaries
-launched from the SD card, no reflashing.**
+**Run sandboxed apps inside device firmware without reflashing. They are tiny
+RISC-V binaries loaded from storage. The engine is device-agnostic. The first
+binding runs on e-paper readers.**
 
 Dessen lets a [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) /
 [FreeInk](https://github.com/Free-Ink/freeink-sdk) e-paper reader run small apps
@@ -121,6 +122,26 @@ Most of the binding is the capability set (storage, crypto, network, board
 sensors, text input), and drawing is a small fraction of it. The crypto, network
 and storage *work* is not in that number. It reuses firmware code that is already
 there. Zero when the firmware build doesn't enable it.
+
+## Beyond e-paper
+
+The e-paper reader is the first binding. It is not the whole project. Take it
+away and what is left is reusable: a ~1.3 KB sandboxed RISC-V interpreter plus a
+generator that turns one `.api` file into both the app-side wrappers and the
+firmware-side sanitizing dispatch. The VM is portable C with no dependency but
+`memcpy`. Only [`freeink/`](freeink) is device-specific.
+
+So the same pattern fits any constrained device that wants to run untrusted
+third-party apps without reflashing. A smartwatch running faces and widgets. A
+mechanical keyboard loading macros instead of recompiling firmware. A synth or
+pedal running user patches against an audio buffer. A home-automation hub running
+local rules. A handheld running tiny games. Each new target is its own `.api`
+plus a binding onto its hardware, and the core, the sandbox, and the codegen stay
+the same.
+
+The tradeoff carries over too. An app is a compiled binary, so you need a
+compiler rather than a text file you edit on the device. A host-side authoring
+tool is what closes that gap.
 
 ## Alternatives we evaluated
 
