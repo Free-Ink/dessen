@@ -25,6 +25,7 @@ class Services {
   virtual int clock(uint8_t*) { return -4; }  // 8 bytes local time: u16 year, u8 month,day,hour,min,sec,wday
   virtual bool randomBytes(uint8_t*, uint32_t) { return false; }    // false -> binding's fallback RNG
   virtual int deviceId(char*, uint32_t) { return -4; }             // stable printable id; length or err
+  virtual int locale(char*, uint32_t) { return -4; }               // BCP47 UI language code, e.g. "en"; length or err
 
   // ---- storage (synchronous) ----  return bytes produced, or a DSN_ERR_*
   virtual int fsRead(const char*, uint8_t*, uint32_t) { return -4; }

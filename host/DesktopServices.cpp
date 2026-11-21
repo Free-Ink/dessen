@@ -188,6 +188,15 @@ int DesktopServices::deviceId(char* out, uint32_t cap) {
   return static_cast<int>(n);
 }
 
+int DesktopServices::locale(char* out, uint32_t cap) {
+  const char* code = getenv("DESSEN_LOCALE");
+  if (!code || !*code) code = "en";
+  const size_t n = strlen(code);
+  if (n + 1 > cap) return DSN_ERR_TOO_BIG;
+  memcpy(out, code, n + 1);
+  return static_cast<int>(n);
+}
+
 // ---- storage ----
 int DesktopServices::fsRead(const char* path, uint8_t* out, uint32_t cap) {
   if (fsRoot_.empty()) return DSN_ERR_UNAVAILABLE;

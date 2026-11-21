@@ -24,6 +24,10 @@ int main(void) {
   char id[80];
   CHECK(4, dsn_device_id(id, sizeof id) == 64);
 
+  // --- UI language (BCP47 code); the host default is "en" ---
+  char loc[8];
+  CHECK(40, dsn_locale(loc, sizeof loc) == 2 && loc[0] == 'e' && loc[1] == 'n');
+
   // --- storage round-trip ---
   unsigned char payload[40];
   fill(payload, sizeof payload, 9);

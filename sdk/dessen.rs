@@ -21,6 +21,7 @@ pub const DSN_SYS_TIME: usize = 32;
 pub const DSN_SYS_DEVICE_ID: usize = 33;
 pub const DSN_SYS_CLOCK: usize = 35;
 pub const DSN_SYS_RANDOM_BYTES: usize = 34;
+pub const DSN_SYS_LOCALE: usize = 36;
 pub const DSN_SYS_TEXT_INPUT: usize = 40;
 pub const DSN_SYS_FS_LIST: usize = 48;
 pub const DSN_SYS_FS_READ: usize = 49;
@@ -203,6 +204,8 @@ pub fn dsn_device_id(id: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_DEVICE_I
 pub fn dsn_clock(t: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_CLOCK, t.as_mut_ptr() as usize, t.len()) } }
 #[inline]
 pub fn dsn_random_bytes(buf: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_RANDOM_BYTES, buf.as_mut_ptr() as usize, buf.len()) } }
+#[inline]
+pub fn dsn_locale(code: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_LOCALE, code.as_mut_ptr() as usize, code.len()) } }
 #[inline]
 pub fn dsn_text_input(prompt: &[u8], text: &mut [u8], flags: i32) -> i32 { unsafe { dsn_call5(DSN_SYS_TEXT_INPUT, prompt.as_ptr() as usize, prompt.len(), text.as_mut_ptr() as usize, text.len(), ((flags as u32 & 0xff)) as usize) } }
 #[inline]

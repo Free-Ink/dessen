@@ -204,6 +204,17 @@ case 34: { // random_bytes
   a[0] = result;
   break;
 }
+case 36: { // locale
+  const uint32_t code_len = a[1];
+  uint8_t* code = static_cast<uint8_t*>(dvm_ptr(vm, a[0], code_len));
+  (void)code_len;
+  const uint32_t code_addr = a[0]; (void)code_addr;
+  if (!code) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = self.services() ? self.services()->locale(reinterpret_cast<char*>(code), code_len) : DSN_ERR_UNAVAILABLE;
+  a[0] = result;
+  break;
+}
 case 40: { // text_input
   char prompt_buf[kStrMax + 1];
   const char* prompt = guestStr(vm, a[0], a[1], prompt_buf);

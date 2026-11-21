@@ -46,6 +46,7 @@
 33 device_id(out id) -> i32    : result = svcDeviceId(self, id, id_len);
 35 clock(out t) -> i32         : result = svcClock(self, t, t_len);
 34 random_bytes(out buf) -> i32 : self.randomBytesInto(buf, buf_len); result = buf_len;
+36 locale(out code) -> i32     : result = self.services() ? self.services()->locale(reinterpret_cast<char*>(code), code_len) : DSN_ERR_UNAVAILABLE;
 
 # --- UI (40-47) ---
 # text_input is a capability, not an app-drawn widget: the app asks for text and
