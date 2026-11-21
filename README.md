@@ -6,12 +6,16 @@ launched from the SD card, no reflashing.**
 Dessen lets a [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) /
 [FreeInk](https://github.com/Free-Ink/freeink-sdk) e-paper reader run small apps
 without flashing new firmware. An app is a tiny RISC-V binary that the firmware
-runs inside a ~1.3 KB interpreter, sandboxed so it can only touch the screen,
-buttons, and the capabilities the firmware hands it — never the flash, the
-radio, or anything else. Apps draw through the reader's own renderer and fonts,
-so they look native and work across every board; they launch straight from the
-SD card alongside the existing plugins. The whole app-facing API is a thin,
-generated projection of the FreeInk SDK, so games, tools, and utilities ship as
+runs inside a ~1.3 KB interpreter, sandboxed so it only reaches the device
+through calls the firmware hands it. It never touches the flash or the radio
+directly, but the firmware can offer it the screen, buttons, storage, network,
+crypto and the board sensors as curated, bounds-checked calls. Apps draw through
+the reader's own renderer and fonts, so they look native and run on every board,
+and they launch straight from the SD card alongside the existing plugins. You can
+write them in C, Rust or Zig. An app can be a game or a tool, replace the whole
+home screen, react to firmware events like reaching the end of a book, or build
+reading-stats cards from the device's own session log. The app-facing API is a
+thin, generated projection of the FreeInk SDK, so all of this ships as
 self-contained files instead of firmware forks.
 
 > **Status: pre-release / experimental.** The app ABI is still changing freely.
@@ -26,8 +30,10 @@ write it, drop it in `/plugins/`, launch it from the menu. The firmware stays
 one build; the apps are independent.
 
 It is **not** a VM that emulates an ESP32, a browser-script plugin, or a Lua
-engine. It is a small virtual CPU (RISC-V RV32IM) with a sandbox, plus a set of
-system calls that map onto the FreeInk SDK.
+engine. It is an interpreter for the RISC-V RV32IM instruction set with a
+sandbox, plus a set of system calls that map onto the FreeInk SDK. It runs real
+compiled machine code the way a RISC-V chip would, so there is no bytecode of its
+own and no garbage collector.
 
 ## Demo apps
 
@@ -37,6 +43,8 @@ system calls that map onto the FreeInk SDK.
 | [`dice`](apps/dice.c) | Polyhedral dice roller (d4–d100), touch + buttons, hardware random |
 | [`lightsout`](apps/lightsout.c) | A touch/button grid puzzle with generated solvable levels |
 | [`sudoku`](apps/sudoku.c) | On-device puzzle generation with a unique solution |
+| [`minimal`](apps/minimal.c) / [`home`](apps/home.c) | Home launchers that replace the device home screen, mixing built-in screens and other apps |
+| [`readstats`](apps/readstats.rs) | Reading-stats cards (heatmap, charts) from the session log, written in Rust |
 
 ## Quick start
 
@@ -76,6 +84,11 @@ Apps are event-driven (draw → refresh → `wait_event`), get semantic events
 (`CONFIRM/BACK/PREV/NEXT/TAP`) so one binary works on touch and button boards,
 and draw inside the device's safe area so nothing lands under a bezel.
 
+That is C, but an app is just a RISC-V binary, so Rust and Zig work too. The same
+call wrappers are generated for all three. Run `make rust` or `make zig` to build
+the `hello` example in each, and see [`apps/readstats.rs`](apps/readstats.rs) for
+a full Rust app.
+
 ## How it works
 
 ```
@@ -103,11 +116,11 @@ app.c ──(RISC-V GCC)──▶ app.bin ──┐
 - Apps carry their own logic; the firmware provides the device. The app API is a
   projection of the SDK, not a reimplementation.
 
-Flash cost on an ESP32-C3 (`-Os`): ~1.3 KB interpreter + ~5.7 KB binding ≈ **7 KB**
-(the binding at ~2.8 KB for drawing alone, the rest for the full capability set —
-storage, crypto, network, board sensors, text input). The crypto/network/storage
-*work* is not in that number: it reuses firmware code that is already there. Zero
-when the firmware build doesn't enable it.
+Flash cost on an ESP32-C3 (`-Os`): ~1.3 KB interpreter + ~6.7 KB binding ≈ **8 KB**.
+Most of the binding is the capability set (storage, crypto, network, board
+sensors, text input), and drawing is a small fraction of it. The crypto, network
+and storage *work* is not in that number. It reuses firmware code that is already
+there. Zero when the firmware build doesn't enable it.
 
 ## Alternatives we evaluated
 
@@ -119,20 +132,20 @@ ESP32-C3 at `-Os` and measured directly (see Method), not quoted.
 
 | Approach | App is | Engine flash | Authoring | Why not |
 |---|---|---:|---|---|
-| **dessen** (this repo) | compiled RV32IM `.bin` | **~7 KB** (1.3 KB VM + 5.7 KB binding) | needs a compiler (a tool can hide it) | — chosen |
-| Lua 5.4 | `.lua` text file | ~119 KB¹ (141 KB full) | edit on the SD card, no toolchain | 30× the flash; GC on a 380 KB heap |
-| MicroQuickJS | `.js` text file | ~109 KB² | edit on the SD card; same language as plugin.js | 27× the flash; heavier RAM |
+| **dessen** (this repo) | compiled RV32IM `.bin` | **~8 KB** (1.3 KB VM + 6.7 KB binding) | needs a compiler (a tool can hide it) | — chosen |
+| Lua 5.4 | `.lua` text file | ~119 KB¹ (141 KB full) | edit on the SD card, no toolchain | 15× the flash, GC on a 380 KB heap |
+| MicroQuickJS | `.js` text file | ~109 KB² | edit on the SD card, same language as plugin.js | 14× the flash, heavier RAM |
 | QuickJS (full) | `.js` text file | ~377 KB | full modern JS | won't fit the headroom |
 | JerryScript | `.js` text file | ~565 KB⁴ | edit on the SD card | largest of the lot; even reduced profiles stay in the hundreds of KB |
-| wasm3 (WASM) | `.wasm` from C/Rust/Zig | ~74 KB | needs a compiler *and* a wasm toolchain | 18× the flash, still needs a compiler |
-| Berry | `.be` text file | ~70 KB core³ (129 KB full) | edit on the SD card | 17×+ the flash |
+| wasm3 (WASM) | `.wasm` from C/Rust/Zig | ~74 KB | needs a compiler *and* a wasm toolchain | 9× the flash, still needs a compiler |
+| Berry | `.be` text file | ~70 KB core³ (129 KB full) | edit on the SD card | 9×+ the flash |
 | Chain-load whole firmware `.bin`s | a full firmware image | ~0 engine | build a whole firmware per app | reflash per launch; MBs per app; partition/bootloader work; no sandbox |
 | Emulate an ESP32 in the ESP32 | an unmodified firmware `.bin` | n/a | — | infeasible: RAM, closed radio blobs, ~20–50× slowdown |
 | Extend `device.json` (declarative) | a JSON manifest | ~0 | edit on the SD card | can't compute anything (no games, tools, logic) |
 
-Every scripting-engine row would **also** need the same ~5.7 KB capability
-binding on top, plus its own interpreter heap in RAM; the compiled-bin approach
-needs only the binding. The one thing the scripting engines win is authoring — editing a text
+Every scripting-engine row would **also** need the same ~6.7 KB capability
+binding on top, plus its own interpreter heap in RAM, where the compiled-bin
+approach needs only the binding. The one thing the scripting engines win is authoring — editing a text
 file straight on the card, no compiler — which is what a host-side
 [authoring tool](docs/writing-apps.md) is meant to close for dessen.
 
@@ -157,7 +170,7 @@ freeink/       the host binding onto FreeInk SDK types
 apps/          demo + test apps (.c) and their menu manifests (.json)
 host/          desktop runner + a recording draw target for tests
 tools/         gen_api.py (codegen), sync_check.py (SDK drift report)
-docs/          writing-apps.md
+docs/          writing-apps.md, proposed-capabilities.md
 AGENTS.md      guide for building apps / capabilities with an AI assistant
 ```
 
