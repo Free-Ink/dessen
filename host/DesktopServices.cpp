@@ -510,7 +510,7 @@ int DesktopServices::fetchStart(const char* url, const char* dest) {
   return result;
 }
 
-int DesktopServices::textInputStart(const char*, int, char* out, uint32_t cap) {
+int DesktopServices::textInputStart(const char*, char* out, uint32_t cap) {
   if (!fgets(out, static_cast<int>(cap), stdin)) return -1; // cancelled (EOF)
   size_t n = strlen(out);
   if (n && out[n - 1] == '\n') out[--n] = '\0';

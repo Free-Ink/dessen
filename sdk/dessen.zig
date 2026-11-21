@@ -152,7 +152,7 @@ pub fn device_id(id: []u8) i32 { return call2(DSN_SYS_DEVICE_ID, @intFromPtr(id.
 pub fn clock(t: []u8) i32 { return call2(DSN_SYS_CLOCK, @intFromPtr(t.ptr), t.len); }
 pub fn random_bytes(buf: []u8) i32 { return call2(DSN_SYS_RANDOM_BYTES, @intFromPtr(buf.ptr), buf.len); }
 pub fn locale(code: []u8) i32 { return call2(DSN_SYS_LOCALE, @intFromPtr(code.ptr), code.len); }
-pub fn text_input(prompt: []const u8, text: []u8, flags: i32) i32 { return call5(DSN_SYS_TEXT_INPUT, @intFromPtr(prompt.ptr), prompt.len, @intFromPtr(text.ptr), text.len, @as(usize, (@as(u32, @bitCast(flags)) & 0xff))); }
+pub fn text_input(prompt: []const u8, text: []u8) i32 { return call4(DSN_SYS_TEXT_INPUT, @intFromPtr(prompt.ptr), prompt.len, @intFromPtr(text.ptr), text.len); }
 pub fn fs_list(path: []const u8, entries: []u8) i32 { return call4(DSN_SYS_FS_LIST, @intFromPtr(path.ptr), path.len, @intFromPtr(entries.ptr), entries.len); }
 pub fn fs_read(path: []const u8, data: []u8) i32 { return call4(DSN_SYS_FS_READ, @intFromPtr(path.ptr), path.len, @intFromPtr(data.ptr), data.len); }
 pub fn fs_write(path: []const u8, data: []const u8) i32 { return call4(DSN_SYS_FS_WRITE, @intFromPtr(path.ptr), path.len, @intFromPtr(data.ptr), data.len); }

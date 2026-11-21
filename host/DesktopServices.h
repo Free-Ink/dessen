@@ -52,7 +52,7 @@ class DesktopServices : public Services {
   // async — desktop completes them synchronously, so poll() is never reached
   int netStart(const char* head, const uint8_t* body, uint32_t bn, uint8_t* resp, uint32_t cap) override;
   int fetchStart(const char* url, const char* dest) override;
-  int textInputStart(const char* prompt, int flags, char* out, uint32_t cap) override;
+  int textInputStart(const char* prompt, char* out, uint32_t cap) override;
   int keygenStart(uint32_t bits, uint8_t* pub, uint32_t pubCap, uint8_t* priv, uint32_t privCap) override;
 
   // Recorded board state, for assertions.

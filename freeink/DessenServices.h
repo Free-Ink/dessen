@@ -79,7 +79,7 @@ class Services {
   virtual int keygenStart(uint32_t, uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int netStart(const char*, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int fetchStart(const char*, const char*) { return -4; }
-  virtual int textInputStart(const char*, int, char*, uint32_t) { return -4; }
+  virtual int textInputStart(const char*, char*, uint32_t) { return -4; }
   // Poll the single outstanding async op. Returns kPending or a final code; on a
   // two-output op (keygen) sets the secondary length via the op's own state.
   virtual int poll() { return -4; }

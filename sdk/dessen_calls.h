@@ -93,7 +93,7 @@ static inline int dsn_device_id(void *id, int id_len) { return (int)dsn_call2(DS
 static inline int dsn_clock(void *t, int t_len) { return (int)dsn_call2(DSN_SYS_CLOCK, (long)t, t_len); }
 static inline int dsn_random_bytes(void *buf, int buf_len) { return (int)dsn_call2(DSN_SYS_RANDOM_BYTES, (long)buf, buf_len); }
 static inline int dsn_locale(void *code, int code_len) { return (int)dsn_call2(DSN_SYS_LOCALE, (long)code, code_len); }
-static inline int dsn_text_input(const char *prompt, int prompt_len, void *text, int text_len, int flags) { return (int)dsn_call5(DSN_SYS_TEXT_INPUT, (long)prompt, prompt_len, (long)text, text_len, (long)(((unsigned)flags & 0xff))); }
+static inline int dsn_text_input(const char *prompt, int prompt_len, void *text, int text_len) { return (int)dsn_call4(DSN_SYS_TEXT_INPUT, (long)prompt, prompt_len, (long)text, text_len); }
 static inline int dsn_fs_list(const void *path, int path_len, void *entries, int entries_len) { return (int)dsn_call4(DSN_SYS_FS_LIST, (long)path, path_len, (long)entries, entries_len); }
 static inline int dsn_fs_read(const void *path, int path_len, void *data, int data_len) { return (int)dsn_call4(DSN_SYS_FS_READ, (long)path, path_len, (long)data, data_len); }
 static inline int dsn_fs_write(const void *path, int path_len, const void *data, int data_len) { return (int)dsn_call4(DSN_SYS_FS_WRITE, (long)path, path_len, (long)data, data_len); }

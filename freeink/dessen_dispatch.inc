@@ -224,9 +224,8 @@ case 40: { // text_input
   (void)text_len;
   const uint32_t text_addr = a[2]; (void)text_addr;
   if (!text) { a[0] = static_cast<uint32_t>(-1); break; }
-  const uint32_t flags = static_cast<uint8_t>(a[4] >> 0); (void)flags;
   uint32_t result = 0;
-  return self.beginTextInput(prompt, text, text_len, (int)flags);
+  return self.beginTextInput(prompt, text, text_len);
   a[0] = result;
   break;
 }

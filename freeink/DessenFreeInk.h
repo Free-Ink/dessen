@@ -60,7 +60,7 @@ class FreeInkHost {
   int beginNet(const uint8_t* head, uint32_t headLen, const uint8_t* body, uint32_t bodyLen, uint8_t* resp,
                uint32_t respCap);
   int beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* dest, uint32_t destLen);
-  int beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, int flags);
+  int beginTextInput(const char* prompt, uint8_t* out, uint32_t cap);
   int beginKeygen(uint32_t bits, uint8_t* pub, uint32_t pubCap, uint8_t* priv, uint32_t privCap);
   int beginWifi();
   int requestLaunch(int kind, const uint8_t* path, uint32_t pathLen); // open_book/settings/browser

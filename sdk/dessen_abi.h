@@ -97,9 +97,6 @@ typedef struct {
 // rsa_sign() flags (OR into the algo byte)
 #define DSN_SIGN_NODIGESTINFO 0x80  // sign the bare digest, no DigestInfo prefix
 
-// text_input() flags
-#define DSN_INPUT_PASSWORD 1
-
 // Book paths contain up to a 255-byte folder, a slash and a 255-byte filename.
 #define DSN_BOOK_PATH_MAX 511
 #define DSN_SHELF_PAGE_MAX 8

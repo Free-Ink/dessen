@@ -51,7 +51,7 @@
 # --- UI (40-47) ---
 # text_input is a capability, not an app-drawn widget: the app asks for text and
 # the firmware runs its own on-screen keyboard (KeyboardEntryActivity).
-40 text_input(str prompt, out text, u8 flags) -> i32 : return self.beginTextInput(prompt, text, text_len, (int)flags);
+40 text_input(str prompt, out text) -> i32 : return self.beginTextInput(prompt, text, text_len);
 
 # --- storage (48-55) ---
 48 fs_list(buf path, out entries) -> i32 : result = svcFs(self, 'l', path, path_len, entries, entries_len, 0, 0);

@@ -389,9 +389,9 @@ int FreeInkHost::beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* 
   return 0;
 }
 
-int FreeInkHost::beginTextInput(const char* prompt, uint8_t* out, uint32_t cap, int flags) {
+int FreeInkHost::beginTextInput(const char* prompt, uint8_t* out, uint32_t cap) {
   if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
-  const int code = services_->textInputStart(prompt, flags, reinterpret_cast<char*>(out), cap);
+  const int code = services_->textInputStart(prompt, reinterpret_cast<char*>(out), cap);
   if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;

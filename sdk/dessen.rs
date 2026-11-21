@@ -207,7 +207,7 @@ pub fn dsn_random_bytes(buf: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_RAND
 #[inline]
 pub fn dsn_locale(code: &mut [u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_LOCALE, code.as_mut_ptr() as usize, code.len()) } }
 #[inline]
-pub fn dsn_text_input(prompt: &[u8], text: &mut [u8], flags: i32) -> i32 { unsafe { dsn_call5(DSN_SYS_TEXT_INPUT, prompt.as_ptr() as usize, prompt.len(), text.as_mut_ptr() as usize, text.len(), ((flags as u32 & 0xff)) as usize) } }
+pub fn dsn_text_input(prompt: &[u8], text: &mut [u8]) -> i32 { unsafe { dsn_call4(DSN_SYS_TEXT_INPUT, prompt.as_ptr() as usize, prompt.len(), text.as_mut_ptr() as usize, text.len()) } }
 #[inline]
 pub fn dsn_fs_list(path: &[u8], entries: &mut [u8]) -> i32 { unsafe { dsn_call4(DSN_SYS_FS_LIST, path.as_ptr() as usize, path.len(), entries.as_mut_ptr() as usize, entries.len()) } }
 #[inline]
