@@ -160,6 +160,10 @@ ESP32-C3 at `-Os` and measured directly (see Method), not quoted.
 | JerryScript | `.js` text file | ~565 KB⁴ | edit on the SD card | largest of the lot; even reduced profiles stay in the hundreds of KB |
 | wasm3 (WASM) | `.wasm` from C/Rust/Zig | ~74 KB | needs a compiler *and* a wasm toolchain | 9× the flash, still needs a compiler |
 | Berry | `.be` text file | ~70 KB core³ (129 KB full) | edit on the SD card | 9×+ the flash |
+| zForth | Forth text file | ~5 KB⁸ | edit on the SD card | smallest engine here, but Forth is hard for most app authors; small enough to run as a dessen app instead |
+| Jim Tcl | `.tcl` text file | ~89 KB core⁵ | edit on the SD card | 11× the flash before useful extensions; allocates from the shared heap with no cap |
+| uLisp | Lisp text file | not measured⁶ | edit on the SD card | 72 KB fixed workspace on the C3; built on the Arduino core, so pin and Wi-Fi calls must be removed to sandbox it |
+| s7 Scheme | `.scm` text file | ~1.13 MB⁷ | edit on the SD card | 140× the flash; a desktop-sized engine |
 | Chain-load whole firmware `.bin`s | a full firmware image | ~0 engine | build a whole firmware per app | reflash per launch; MBs per app; partition/bootloader work; no sandbox |
 | Emulate an ESP32 in the ESP32 | an unmodified firmware `.bin` | n/a | — | infeasible: RAM, closed radio blobs, ~20–50× slowdown |
 | Extend `device.json` (declarative) | a JSON manifest | ~0 | edit on the SD card | can't compute anything (no games, tools, logic) |
@@ -173,7 +177,17 @@ file straight on the card, no compiler — which is what a host-side
 <sup>¹ Lua core+parser+useful stdlibs, dropping io/os/debug/package. ² mquickjs +
 dtoa + libm + cutils (Bellard's own figure is ~100 KB ROM). ³ Berry core without
 the optional `*lib` modules, which are needed for a usable embed. ⁴ JerryScript
-default profile, all 200 core TUs; it is configurable downward but stays large.</sup>
+default profile, all 200 core TUs; it is configurable downward but stays large.
+⁵ Jim Tcl `jim.c` + `jim-subcmd.c` + `jim-format.c` + `utf8.c`, with UTF-8,
+math functions and every `jim-*.c` extension (file, aio, regexp, clock) left
+out. ⁶ uLisp is a single Arduino sketch that needs the full Arduino-ESP32 core
+to compile, so it was not measured; the 72 KB is its own C3 default
+(`WORKSPACESIZE` 9216 objects × 8 bytes). ⁷ s7 with the C loader and system
+extras off; compiling it needed stub `utsname`/`rusage` headers and
+`sigsetjmp` mapped to `setjmp`. Its default heap starts at 64,000 cells.
+⁸ zForth with `int32_t` cells, chosen in the port's own `zfconf.h`. Its Linux
+example uses `float` cells, which is 6.1 KB and pulls in the C3's software float
+routines.</sup>
 
 **Method:** each engine's C sources were compiled with
 `riscv32-esp-elf-gcc -march=rv32imc_zicsr_zifencei -mabi=ilp32 -Os

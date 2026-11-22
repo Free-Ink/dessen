@@ -13,6 +13,8 @@ use core::panic::PanicInfo;
 
 #[panic_handler]
 fn panic(_: &PanicInfo) -> ! {
+    // Exit so the host leaves the app, instead of spinning until a force quit.
+    dsn_exit(99);
     loop {}
 }
 
