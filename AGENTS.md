@@ -54,9 +54,11 @@ the **crosspoint-reader** repo on branch `feat/dessen-apps`, behind
 ## Build & test
 
 ```sh
-make test     # generate, build VM + apps, run the suite  ← run this after any change
-make sd       # stage build/sd/plugins/<app>/ for copying to an SD card
+make test     # generate, build VM + C and Rust apps, run the suite  ← run this after any change
+make sd       # stage build/sd/plugins/<app>/ (C and Rust apps) for an SD card
+make test RUST=no   # C only, when Rust (the riscv32im target) is absent
 make size     # ESP32-C3 flash cost of the VM and the binding
+zig build     # the Zig apps with Zig alone (build.zig, also read by zls); zig build run -Dapp=hello
 make FREEINK_SDK=/path/to/freeink-sdk test   # if the SDK isn't a sibling dir
 ```
 
@@ -84,8 +86,12 @@ the stable `tools/` path.
 4. Remember the limits: 64 KB fixed memory, no libc, no `malloc`, no 64-bit
    divide helper unless you add one. Hand-write small helpers like the examples.
 5. Add `<name>` to `APPS` (and `SD_APPS` if it should launch on a device) in the
-   `Makefile`; add `apps/<name>.json` with `title` + `description`.
-6. `build/dessen build/<name>.bin` to run on the desktop (`c/b/p/n` = events).
+   `Makefile`; add `apps/<name>.json` with `title` + `description`. Add
+   `"requires": ["touch"]` (or `["buttons"]`) only if the app is unusable
+   without it; an app with both paths needs no `requires`.
+6. `build/dessen build/<name>.bin` to run on the desktop (`c/b/p/n` = events;
+   `DESSEN_BOARD=touch|buttons|both` picks the board, `DESSEN_MANIFEST` the
+   manifest it checks; exit 103 = the board cannot drive the app).
 7. Add a check and run `make test`.
 
 ## Recipe: add a capability (one new call)

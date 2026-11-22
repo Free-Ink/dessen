@@ -37,7 +37,7 @@ case 5: { // device
   const uint32_t info_addr = a[0]; (void)info_addr;
   if (!info) { a[0] = static_cast<uint32_t>(-1); break; }
   uint32_t result = 0;
-  result = writeDeviceInfo(self.device_, screen, info, info_len);
+  result = writeDeviceInfo(self.device_, screen, self.services() ? self.services()->buttonHintsHeight() : 0, info, info_len);
   a[0] = result;
   break;
 }
@@ -162,6 +162,26 @@ case 25: { // bitmap
   const uint32_t rotation = static_cast<uint8_t>(a[5] >> 24); (void)rotation;
   uint32_t result = 0;
   result = drawBitmap(target, screen, x, y, w, h, data, data_len, bw, bh, format, mode, color, rotation);
+  a[0] = result;
+  break;
+}
+case 26: { // set_clip
+  const int32_t x = static_cast<int16_t>(a[0] >> 0); (void)x;
+  const int32_t y = static_cast<int16_t>(a[0] >> 16); (void)y;
+  const int32_t w = static_cast<int16_t>(a[1] >> 0); (void)w;
+  const int32_t h = static_cast<int16_t>(a[1] >> 16); (void)h;
+  uint32_t result = 0;
+  result = self.setClip(x, y, w, h);
+  a[0] = result;
+  break;
+}
+case 27: { // button_hints
+  const uint32_t labels_len = a[1];
+  const uint8_t* labels = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], labels_len));
+  (void)labels_len;
+  if (!labels) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = self.buttonHints(labels, labels_len);
   a[0] = result;
   break;
 }

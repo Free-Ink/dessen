@@ -8,11 +8,16 @@ APPFLAGS = -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -mno-relax \
 APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal
 SD_APPS = hello lightsout dice sudoku home minimal
 
-# Rust/Zig examples join `make sd` when their toolchain is installed (Rust also
-# needs the riscv32im target). Override with SD_LANG_APPS="" or "hello_rs".
+# Rust is part of `make test` and `make sd`: the Rust SDK, the hand-linked Rust
+# apps (hello_rs, readstats) are built, checked and staged alongside the C
+# ones. It needs the riscv32im target (`make rust-check` says how to add it).
+# RUST=no leaves Rust out.
+# Zig joins `make sd` when its toolchain is installed.
+RUST ?= yes
 HAVE_RUST := $(shell rustup target list --installed 2>/dev/null | grep -qx riscv32im-unknown-none-elf && echo y)
 HAVE_ZIG := $(shell command -v zig >/dev/null 2>&1 && echo y)
-SD_LANG_APPS ?= $(if $(HAVE_RUST),hello_rs) $(if $(HAVE_ZIG),hello_zig)
+WITH_RUST := $(filter yes,$(RUST))
+SD_LANG_APPS ?= $(if $(WITH_RUST),hello_rs readstats) $(if $(HAVE_ZIG),hello_zig)
 
 # FreeInk SDK checkout, used read-only for its UI headers.
 FREEINK_SDK ?= ../freeink-sdk
@@ -30,7 +35,7 @@ endif
 
 GEN = sdk/dessen_sysnums.h sdk/dessen_calls.h freeink/dessen_dispatch.inc
 HOSTFLAGS = -std=c++17 -O2 -Wall -Wextra -Ivm -Isdk -Ifreeink -Ihost $(OPENSSL_CFLAGS) -I$(FREEINK_SDK)/libs/ui/FreeInkUI/include
-BINDING = sdk/dessen_abi.h freeink/DessenFreeInk.cpp freeink/DessenFreeInk.h freeink/DessenServices.h host/DesktopServices.cpp host/DesktopServices.h host/TraceTarget.h vm/dessen_vm.h $(GEN)
+BINDING = sdk/dessen_abi.h freeink/DessenFreeInk.cpp freeink/DessenFreeInk.h freeink/DessenServices.h host/DesktopServices.cpp host/DesktopServices.h host/TraceTarget.h host/Manifest.h vm/dessen_vm.h $(GEN)
 
 all: build/dessen build/test_freeink $(APPS:%=build/%.bin)
 
@@ -62,7 +67,7 @@ build/%.bin: apps/%.c sdk/crt0.S sdk/rt.c sdk/app.ld sdk/dessen.h sdk/dessen_abi
 
 # Exit codes: selftest 0 = all checks pass; hello returns the event it got
 # (c = confirm = 1); oob must fault (101 = memory fault).
-test: all
+test: $(if $(WITH_RUST),rust-check) all $(if $(WITH_RUST),rust)
 	build/dessen build/selftest.bin
 	printf c | build/dessen build/hello.bin; test $$? -eq 1
 	build/dessen build/oob.bin; test $$? -eq 101
@@ -75,6 +80,14 @@ test: all
 	printf nnc | build/dessen build/home.bin | grep -q 'launch reader /books/neuromancer.epub'
 	build/dessen build/home.bin </dev/null | grep -q '37%'
 	printf nnnc | build/dessen build/minimal.bin | grep -q 'launch app /plugins/dice/app.bin'
+	@for m in apps/*.json; do python3 -c 'import json,sys; r=json.load(open(sys.argv[1])).get("requires",[]); \
+	  sys.exit(0 if isinstance(r,list) and set(r)<={"touch","buttons"} else sys.argv[1]+": requires is a list of touch/buttons")' $$m || exit 1; done
+	@tmp=$$(mktemp -d); printf '{"title":"T","requires":["touch"]}' > $$tmp/m.json; \
+	  DESSEN_MANIFEST=$$tmp/m.json build/dessen build/hello.bin </dev/null 2>/dev/null; a=$$?; \
+	  printf c | DESSEN_BOARD=both DESSEN_MANIFEST=$$tmp/m.json build/dessen build/hello.bin >/dev/null 2>&1; b=$$?; \
+	  mkdir $$tmp/sd && cp build/hello.bin $$tmp/sd/app.bin && printf '{"requires":["buttons"]}' > $$tmp/sd/manifest.json; \
+	  DESSEN_BOARD=touch build/dessen $$tmp/sd/app.bin </dev/null 2>/dev/null; c=$$?; rm -rf $$tmp; \
+	  test $$a -eq 103 -a $$b -eq 1 -a $$c -eq 103 && echo 'manifest requires: PASS'
 	@tmp=$$(mktemp -d); DESSEN_FS_ROOT=$$tmp build/dessen build/captest.bin; rc=$$?; rm -rf $$tmp; test $$rc -eq 0 && echo 'captest: PASS'
 	@nr=$$(mktemp -d); fs=$$(mktemp -d); mkdir -p $$nr/example.test; \
 	  printf 'hello world' > $$nr/example.test/hello; \
@@ -85,8 +98,13 @@ test: all
 	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/home.bin
 	@echo PASS
 
+# Fails early, with the fix, when `test`/`sd` would need Rust that is not here.
+rust-check:
+	@test -n "$(HAVE_RUST)" || { echo "Rust with the riscv32im target is needed (or pass RUST=no):"; \
+	  echo "  rustup target add riscv32im-unknown-none-elf"; exit 1; }
+
 # Plugin folders ready to copy into /plugins on the SD card.
-sd: all $(SD_LANG_APPS:%=build/%.bin)
+sd: $(if $(WITH_RUST),rust-check) all $(SD_LANG_APPS:%=build/%.bin)
 	@for a in $(SD_APPS) $(SD_LANG_APPS); do mkdir -p build/sd/plugins/$$a && cp build/$$a.bin build/sd/plugins/$$a/app.bin \
 	  && cp apps/$$a.json build/sd/plugins/$$a/manifest.json; done; ls build/sd/plugins
 
@@ -110,7 +128,7 @@ size: $(GEN)
 
 # A dessen app written in Rust, to show the runtime is language-agnostic: it
 # links against the same crt0.S + app.ld as the C apps, nothing else changes.
-# Not part of `test` (it needs the Rust toolchain). Run: make rust
+# Part of `test` (see RUST above); on its own: make rust
 #   rustup target add riscv32im-unknown-none-elf   # one-time
 build/hello_rs.bin: apps/hello.rs sdk/dessen.rs sdk/crt0.S sdk/app.ld sdk/dessen_abi.h
 	@mkdir -p build
@@ -133,17 +151,34 @@ build/%.bin: apps/%.rs sdk/crt0.S sdk/app.ld sdk/dessen_abi.h $(GEN)
 	    -Wl,--gc-sections,--no-warn-rwx-segments
 	$(RISCV)objcopy -O binary build/$*.elf $@
 
-# readstats is checked against a generated session log (tools/readstats_fixture.py),
-# then staged next to the `make sd` plugins.
-rust: build/hello_rs.bin build/readstats.bin build/dessen
-	printf 'c' | build/dessen build/hello_rs.bin | grep -q 'Hello from Rust on dessen'
+# The Rust SDK crate (sdk/rust): its heap's unit tests on the host, then its
+# self-checking example on the VM. Pure cargo: rust-lld links with sdk/app.ld,
+# so no crt0.S or gcc step; only objcopy is borrowed from the RISC-V toolchain.
+RUST_SDK = cargo --quiet --color never
+RUST_SDK_OUT = build/rust/riscv32im-unknown-none-elf/release/examples
+build/selftest_rs.bin: sdk/rust/Cargo.toml sdk/rust/build.rs $(wildcard sdk/rust/src/*.rs) \
+                       sdk/rust/examples/selftest_rs.rs sdk/app.ld sdk/dessen_abi.h $(GEN)
+	cd sdk/rust && $(RUST_SDK) build --release --target riscv32im-unknown-none-elf \
+	    --features heap --example selftest_rs --target-dir ../../build/rust
+	$(RISCV)objcopy -O binary $(RUST_SDK_OUT)/selftest_rs $@
+
+rust-sdk: build/selftest_rs.bin build/dessen
+	cd sdk/rust && $(RUST_SDK) test --features heap --lib --target-dir ../../build/rust
+	build/dessen build/selftest_rs.bin
+	@echo "rust sdk: PASS"
+
+# The reading-stats checks, for a build of it ($(1)): the cards from a generated
+# session log (tools/readstats_fixture.py), the empty state, an import from
+# CrossPoint Sync, and launching from the book card and an app icon. Run for
+# the Rust app.
+define readstats_check
 	@fs=$$(mktemp -d); python3 tools/readstats_fixture.py $$fs; \
-	  out=$$(printf nnnnnnnnnnbb | DESSEN_FS_ROOT=$$fs build/dessen build/readstats.bin); rc=$$?; rm -rf $$fs; \
-	  test $$rc -eq 0 || { echo "readstats: exit $$rc"; exit 1; }; \
+	  out=$$(printf nnnnnnnnnnbb | DESSEN_FS_ROOT=$$fs build/dessen $(1)); rc=$$?; rm -rf $$fs; \
+	  test $$rc -eq 0 || { echo "$(1): exit $$rc"; exit 1; }; \
 	  for want in ' 30m$$' ' 45m$$' ' 2 days$$' ' 5h 45m$$' ' 32$$' ' 5h 30m$$' ' Dune$$' ' The "Left" Hand$$' ' 1\.6$$' ' Continue reading$$' ' Settings$$'; do \
-	    echo "$$out" | grep -q -- "$$want" || { echo "readstats: missing '$$want'"; echo "$$out"; exit 1; }; done; \
-	  empty=$$(mktemp -d); printf b | DESSEN_FS_ROOT=$$empty build/dessen build/readstats.bin | grep -q 'No reading sessions yet'; rc=$$?; \
-	  rm -rf $$empty; test $$rc -eq 0 || { echo "readstats: no empty state"; exit 1; }
+	    echo "$$out" | grep -q -- "$$want" || { echo "$(1): missing '$$want'"; echo "$$out"; exit 1; }; done; \
+	  empty=$$(mktemp -d); printf b | DESSEN_FS_ROOT=$$empty build/dessen $(1) | grep -q 'No reading sessions yet'; rc=$$?; \
+	  rm -rf $$empty; test $$rc -eq 0 || { echo "$(1): no empty state"; exit 1; }
 	@# Import: an empty reader with a sync account downloads its history (fixture server: sync.test).
 	@fs=$$(mktemp -d); net=$$(mktemp -d); api=$$net/sync.test/api/v1/stats/sessions; \
 	  mkdir -p $$fs/.crosspoint $$api; \
@@ -151,12 +186,19 @@ rust: build/hello_rs.bin build/readstats.bin build/dessen
 	  tz=$$(python3 -c 'import time; print(-time.localtime().tm_gmtoff // 60)'); \
 	  printf '{"path":"/api/v1/stats/sessions/export?export_token=t","sessions":32}' > "$$api/export-link?tz=$$tz"; \
 	  python3 tools/readstats_fixture.py $$net; mv $$net/.crosspoint/reading_sessions.jsonl "$$api/export?export_token=t"; \
-	  out=$$(printf 'csecret\nb' | DESSEN_FS_ROOT=$$fs DESSEN_NET_ROOT=$$net build/dessen build/readstats.bin); \
+	  out=$$(printf 'csecret\nb' | DESSEN_FS_ROOT=$$fs DESSEN_NET_ROOT=$$net build/dessen $(1)); \
 	  test -s $$fs/.crosspoint/reading_sessions.jsonl; rc=$$?; rm -rf $$fs $$net; \
 	  echo "$$out" | grep -q 'Import from CrossPoint Sync' && echo "$$out" | grep -q -- ' 5h 45m$$' && test $$rc -eq 0 \
-	    || { echo "readstats: import failed"; echo "$$out"; exit 1; }
-	printf c | build/dessen build/readstats.bin | grep -q 'launch reader /books/dune.epub'
-	printf nnc | build/dessen build/readstats.bin | grep -q 'launch home 0'
+	    || { echo "$(1): import failed"; echo "$$out"; exit 1; }
+	printf c | build/dessen $(1) | grep -q 'launch reader /books/dune.epub'
+	printf nnc | build/dessen $(1) | grep -q 'launch home 0'
+endef
+
+# readstats is checked against a generated session log (tools/readstats_fixture.py),
+# then staged next to the `make sd` plugins.
+rust: rust-sdk build/hello_rs.bin build/readstats.bin build/dessen
+	printf 'c' | build/dessen build/hello_rs.bin | grep -q 'Hello from Rust on dessen'
+	$(call readstats_check,build/readstats.bin)
 	@mkdir -p build/sd/plugins/readstats && cp build/readstats.bin build/sd/plugins/readstats/app.bin \
 	  && cp apps/readstats.json build/sd/plugins/readstats/manifest.json
 	@echo "rust apps: PASS"
@@ -178,4 +220,4 @@ zig: build/hello_zig.bin build/dessen
 clean:
 	rm -rf build
 
-.PHONY: all test sd sync sync-accept size rust zig clean
+.PHONY: all test sd sync sync-accept size rust rust-check rust-sdk zig clean

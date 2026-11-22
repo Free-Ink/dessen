@@ -10,6 +10,11 @@
 #pragma once
 #include <stdint.h>
 
+namespace freeink::ui {
+class DrawTarget;
+struct Rect;
+}
+
 namespace dessen {
 
 // Returned by an async *Start/poll when work is still in flight. Not a valid
@@ -26,6 +31,17 @@ class Services {
   virtual bool randomBytes(uint8_t*, uint32_t) { return false; }    // false -> binding's fallback RNG
   virtual int deviceId(char*, uint32_t) { return -4; }             // stable printable id; length or err
   virtual int locale(char*, uint32_t) { return -4; }               // BCP47 UI language code, e.g. "en"; length or err
+
+  // ---- button hints ----  the host's own, in its own look and place
+  // Height of the band along the bottom of the panel (as it is turned now)
+  // where drawButtonHints() draws, in panel pixels. 0 when this device shows
+  // no hints: a touch board, no keys, or keys not along the bottom.
+  virtual int buttonHintsHeight() { return 0; }
+  // Labels for back, confirm, previous and next, each NUL-terminated and
+  // printable; "" is no hint for that action. Drawn into `target` (or the
+  // screen it stands for) over what the app has drawn so far. `band` is the
+  // panel-coordinate band buttonHintsHeight() described.
+  virtual void drawButtonHints(freeink::ui::DrawTarget&, const freeink::ui::Rect&, const char* const[4]) {}
 
   // ---- storage (synchronous) ----  return bytes produced, or a DSN_ERR_*
   virtual int fsRead(const char*, uint8_t*, uint32_t) { return -4; }

@@ -68,8 +68,10 @@ is the full human guide. This skill is the working map.
    Hand-write small helpers like the examples.
 4. Add `<name>` to `APPS` (and `SD_APPS` to launch it on a device) in the
    `Makefile`; add `apps/<name>.json` with `title` + `description` (+ `"home": true`
-   for a launcher).
-5. `build/dessen build/<name>.bin` runs it on the desktop (`c/b/p/n` = events).
+   for a launcher; + `"requires": ["touch"]` or `["buttons"]` only if the app is
+   unusable without it).
+5. `build/dessen build/<name>.bin` runs it on the desktop (`c/b/p/n` = events;
+   `DESSEN_BOARD=touch|buttons|both`, `DESSEN_MANIFEST=apps/<name>.json`).
 6. Add a self-check and run `make test`.
 
 ## The API surface

@@ -15,6 +15,7 @@
 #include <openssl/x509.h>
 
 #include "../host/DesktopServices.h"
+#include "../host/Manifest.h"
 #include "../host/TraceTarget.h"
 #include "../sdk/dessen_abi.h"
 #include "DessenFreeInk.h"
@@ -281,6 +282,29 @@ static void testHome(const char* path) {
   assert(std::string(host.launchPath()) == "/books/dune.epub");
 }
 
+// The manifest's "requires": what the launcher checks before offering an app.
+static void testManifest() {
+  using dessen::meets;
+  using dessen::parseRequires;
+  unsigned needs = 7;
+  assert(parseRequires(R"({"title":"Sudoku","description":"x"})", needs) && needs == 0);
+  assert(parseRequires(R"({"requires": [ ]})", needs) && needs == 0);
+  assert(parseRequires(R"({"title":"Sketch","requires": ["touch"]})", needs) && needs == dessen::NeedTouch);
+  assert(parseRequires("{\"requires\":\n [\"touch\" , \"buttons\"]}", needs) &&
+         needs == (dessen::NeedTouch | dessen::NeedButtons));
+  // The word in a description, even quoted, is not the key.
+  assert(parseRequires(R"({"description":"it \"requires\" nothing"})", needs) && needs == 0);
+  // Malformed: not an array, not strings, unterminated, escapes, empty words.
+  for (const char* bad : {R"({"requires":"touch"})", R"({"requires":[1]})", R"({"requires":["touch")",
+                          R"({"requires":["to\uch"]})", R"({"requires":[""]})", R"({"requires":["touch",]})"})
+    assert(!parseRequires(bad, needs));
+  // A board meets what it has; nobody meets what this host does not know.
+  assert(meets(0, false, true) && meets(0, true, false));
+  assert(!meets(dessen::NeedTouch, false, true) && meets(dessen::NeedTouch, true, false));
+  assert(!meets(dessen::NeedButtons, true, false) && meets(dessen::NeedButtons | dessen::NeedTouch, true, true));
+  assert(parseRequires(R"({"requires":["stylus"]})", needs) && !meets(needs, true, true));
+}
+
 int main(int argc, char** argv) {
   assert(argc == 9);
   DeviceContext screen;
@@ -395,6 +419,18 @@ int main(int argc, char** argv) {
   assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
   assert(shows("fill 10,10 50x30 c4") && shows("stroke 0,0 40x40 w3") && shows("triangle"));
   assert(shows("text 0,100 wrapped and centred") && shows("bitmap 200,10 8x8 src 8x8") && target.lines == 1);
+  // set_clip: clipped to the safe area, the scrim dithers, a negative width
+  // lifts the clip, an off-screen one is empty, and the firmware's clip is
+  // back once the app stops.
+  {
+    const auto at = [&](const char* op) {
+      for (size_t i = 0; i < target.ops.size(); i++) if (target.ops[i] == op) return static_cast<int>(i);
+      return -1;
+    };
+    const int set = at("clip 20,20 100x50"), scrim = at("fill 0,0 480x800 c2 d"), none = at("clip 0,0 0x0");
+    assert(set >= 0 && scrim == set + 1 && target.ops[scrim + 1] == "clip 0,0 32767x32767" && none > scrim);
+    assert(target.ops.back() == "clip 0,0 32767x32767" && target.clip_.width == 32767);
+  }
 
   // Safe area: with bezel insets the app's (0,0) moves inside them, clear
   // still wipes the whole panel, and taps are reported in app coordinates.
@@ -415,10 +451,46 @@ int main(int argc, char** argv) {
   assert(host.step(target, bezel, edge) == dessen::State::Exited);
   assert(static_cast<uint32_t>(host.exitCode()) == (DSN_EV_TAP | 100u << 8 | 100u << 20));
 
-  // drawtest again inside the bezel: it checks dsn_device() against dsn_screen().
+  // drawtest again inside the bezel: it checks dsn_device() against dsn_screen(),
+  // and its clip moves inside the bezel with everything else. Without hint
+  // slots from the firmware it reports none (its own stroke is w3).
   assert(host.load(mem, readApp(argv[6]), sizeof mem));
+  target.ops.clear();
   while (host.step(target, bezel, none) == dessen::State::Running) {}
   assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
+  assert(shows("clip 60,30 100x50") && !shows(" w1"));
+
+  // Button hints are the host's: dsn_device reports how much of its band
+  // falls inside the app's area (40 px, less the 30 px bezel under it), and
+  // the host draws the labels the app gives, skipping an empty one, outside
+  // the app's clip. Without the band, the call draws nothing.
+  {
+    dessen::DesktopServices hints("");
+    hints.hintHeight = 40;
+    host.setServices(&hints);
+    assert(host.load(mem, readApp(argv[6]), sizeof mem));
+    target.ops.clear();
+    while (host.step(target, bezel, none) == dessen::State::Running) {}
+    assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
+    assert(shows("fill 40,760 7x10") && shows("stroke 0,760 120x40 w1") && shows("stroke 120,760 120x40 w1"));
+    assert(!shows("stroke 240,760") && shows("stroke 360,760 120x40 w1"));
+    hints.hintHeight = 0;
+    assert(host.load(mem, readApp(argv[6]), sizeof mem));
+    target.ops.clear();
+    while (host.step(target, bezel, none) == dessen::State::Running) {}
+    assert(host.state() == dessen::State::Exited && host.exitCode() == 0 && !shows(",760 "));
+    host.setServices(nullptr);
+  }
+
+  // A Left or Right key marks its PREV/NEXT sideways, once; DSN_EV_TYPE is unchanged.
+  assert(host.load(mem, readApp(argv[1]), sizeof mem));
+  while (host.step(target, screen, none) == dessen::State::Running) {}
+  InputSnapshot left;
+  left.prev = true;
+  host.markSideways();
+  assert(host.step(target, screen, left) == dessen::State::Exited);
+  assert(static_cast<uint32_t>(host.exitCode()) == (DSN_EV_PREV | DSN_EV_SIDEWAYS));
+  assert(DSN_EV_TYPE(static_cast<uint32_t>(host.exitCode())) == DSN_EV_PREV);
 
   // A truncated or garbage image is rejected.
   mem[0] ^= 0xff;
@@ -428,6 +500,7 @@ int main(int argc, char** argv) {
   testPkcs12();       // PKCS#12 parse + blob layout
   testDesktopStorage();
   testHome(argv[8]);
+  testManifest();
 
   puts("freeink binding: PASS");
   return 0;

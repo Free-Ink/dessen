@@ -15,6 +15,13 @@ class DesktopServices : public Services {
   // what fs_app_dir reports. `netRoot` (optional) maps requests to fixture files.
   explicit DesktopServices(std::string fsRoot, std::string appDir = "/app", std::string netRoot = "");
 
+  // Button hints, as a buttons-only board would show them: `hintHeight`
+  // pixels along the bottom, four equal boxes. 0 (the default) shows none.
+  int hintHeight = 0;
+  int buttonHintsHeight() override { return hintHeight; }
+  void drawButtonHints(freeink::ui::DrawTarget& target, const freeink::ui::Rect& band,
+                       const char* const labels[4]) override;
+
   // core
   uint32_t timeNow() override;
   int clock(uint8_t* out) override;
@@ -32,7 +39,10 @@ class DesktopServices : public Services {
   // launcher/home
   int recents(char* out, uint32_t cap) override;
   int recentShelf(uint32_t first, uint32_t count, char* out, uint32_t cap) override;
-  int bookCover(const char*, uint32_t, uint8_t*, uint32_t) override { return 0; }  // desktop has no covers
+  // The desktop has no covers. With fakeCovers set it makes one, a 2:3 portrait
+  // as tall as asked, so an app's cover buffers are measured at their worst.
+  int bookCover(const char*, uint32_t height, uint8_t* out, uint32_t cap) override;
+  bool fakeCovers = false;
   int bookProgress(const char* path) override;
   // crypto
   int hash(int algo, const uint8_t* data, uint32_t n, uint8_t* out, uint32_t cap) override;

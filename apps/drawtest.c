@@ -37,6 +37,24 @@ int main(void) {
   CHECK(13, dsn_bitmap(200, 10, 8, 8, large, sizeof large, 1, 32768, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
   CHECK(14, dsn_bitmap(200, 10, 0, 0, smiley, sizeof smiley, 8, 8, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
 
+  // Button hints: the host's band fits the drawable area, and labels it
+  // cannot draw are refused (a fifth line, a control byte, an overlong one).
+  CHECK(21, d.hint_height <= h);
+  if (d.hint_height > 0) dsn_fill(0, h - d.hint_height, 7, d.hint_height, DSN_BLACK); // marks the band for the test
+  CHECK(22, dsn_button_hints((const uint8_t*)"Back\nSelect\n\nNext", 17) == 0);
+  CHECK(23, dsn_button_hints((const uint8_t*)"a\nb\nc\nd\ne", 9) == -1);
+  CHECK(24, dsn_button_hints((const uint8_t*)"a\tb", 3) == -1);
+  CHECK(25, dsn_button_hints((const uint8_t*)"0123456789012345678901234567890123", 34) == -1);
+
+  // Clipping: limited to a rectangle, lifted by a negative width, and a clip
+  // entirely off screen lets nothing through rather than everything.
+  CHECK(16, dsn_set_clip(20, 20, 100, 50) == 0);
+  dsn_fill(0, 0, w, h, DSN_SCRIM);
+  CHECK(17, dsn_set_clip(0, 0, -1, -1) == 0);
+  CHECK(18, dsn_set_clip(w + 10, 0, 10, 10) == 0);
+  CHECK(19, dsn_set_clip(0, 0, -1, 0) == 0);
+  CHECK(20, dsn_set_clip(10, 10, 20, 20) == 0); // left set: the host restores its own clip at exit
+
   dsn_refresh();
   return 0;
 }

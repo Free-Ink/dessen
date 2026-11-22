@@ -17,6 +17,8 @@ pub const DSN_SYS_TEXT_BOX: usize = 22;
 pub const DSN_SYS_MEASURE_TEXT: usize = 23;
 pub const DSN_SYS_LINE_HEIGHT: usize = 24;
 pub const DSN_SYS_BITMAP: usize = 25;
+pub const DSN_SYS_SET_CLIP: usize = 26;
+pub const DSN_SYS_BUTTON_HINTS: usize = 27;
 pub const DSN_SYS_TIME: usize = 32;
 pub const DSN_SYS_DEVICE_ID: usize = 33;
 pub const DSN_SYS_CLOCK: usize = 35;
@@ -58,110 +60,126 @@ pub const DSN_SYS_BOOK_COVER: usize = 105;
 #[inline]
 unsafe fn dsn_call0(n: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        out("a0") r,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            out("a0") r,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call1(n: usize, a0: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call2(n: usize, a0: usize, a1: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        in("a1") a1,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            in("a1") a1,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call3(n: usize, a0: usize, a1: usize, a2: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        in("a1") a1,
-        in("a2") a2,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            in("a1") a1,
+            in("a2") a2,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        in("a1") a1,
-        in("a2") a2,
-        in("a3") a3,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            in("a1") a1,
+            in("a2") a2,
+            in("a3") a3,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        in("a1") a1,
-        in("a2") a2,
-        in("a3") a3,
-        in("a4") a4,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            in("a1") a1,
+            in("a2") a2,
+            in("a3") a3,
+            in("a4") a4,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        in("a1") a1,
-        in("a2") a2,
-        in("a3") a3,
-        in("a4") a4,
-        in("a5") a5,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            in("a1") a1,
+            in("a2") a2,
+            in("a3") a3,
+            in("a4") a4,
+            in("a5") a5,
+            options(nostack),
+        );
+    }
     r
 }
 #[inline]
 unsafe fn dsn_call7(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize, a6: usize) -> i32 {
     let r: i32;
-    core::arch::asm!(
-        "ecall",
-        in("a7") n,
-        inlateout("a0") a0 => r,
-        in("a1") a1,
-        in("a2") a2,
-        in("a3") a3,
-        in("a4") a4,
-        in("a5") a5,
-        in("a6") a6,
-        options(nostack),
-    );
+    unsafe {
+        core::arch::asm!(
+            "ecall",
+            in("a7") n,
+            inlateout("a0") a0 => r,
+            in("a1") a1,
+            in("a2") a2,
+            in("a3") a3,
+            in("a4") a4,
+            in("a5") a5,
+            in("a6") a6,
+            options(nostack),
+        );
+    }
     r
 }
 
@@ -197,6 +215,10 @@ pub fn dsn_measure_text(s: &[u8], font: i32, flags: i32) -> u32 { unsafe { dsn_c
 pub fn dsn_line_height(font: i32) -> i32 { unsafe { dsn_call1(DSN_SYS_LINE_HEIGHT, ((font as u32 & 0xff)) as usize) } }
 #[inline]
 pub fn dsn_bitmap(x: i32, y: i32, w: i32, h: i32, data: &[u8], bw: i32, bh: i32, format: i32, mode: i32, color: i32, rotation: i32) -> i32 { unsafe { dsn_call6(DSN_SYS_BITMAP, ((x as u32 & 0xffff) | ((y as u32 & 0xffff) << 16)) as usize, ((w as u32 & 0xffff) | ((h as u32 & 0xffff) << 16)) as usize, data.as_ptr() as usize, data.len(), ((bw as u32 & 0xffff) | ((bh as u32 & 0xffff) << 16)) as usize, ((format as u32 & 0xff) | ((mode as u32 & 0xff) << 8) | ((color as u32 & 0xff) << 16) | ((rotation as u32 & 0xff) << 24)) as usize) } }
+#[inline]
+pub fn dsn_set_clip(x: i32, y: i32, w: i32, h: i32) -> i32 { unsafe { dsn_call2(DSN_SYS_SET_CLIP, ((x as u32 & 0xffff) | ((y as u32 & 0xffff) << 16)) as usize, ((w as u32 & 0xffff) | ((h as u32 & 0xffff) << 16)) as usize) } }
+#[inline]
+pub fn dsn_button_hints(labels: &[u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_BUTTON_HINTS, labels.as_ptr() as usize, labels.len()) } }
 #[inline]
 pub fn dsn_time() -> u32 { unsafe { dsn_call0(DSN_SYS_TIME) as u32 } }
 #[inline]

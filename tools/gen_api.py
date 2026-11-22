@@ -116,11 +116,13 @@ def rust_module(calls):
     out += "\n"
     for k in range(MAX_SLOTS + 1):
         params = "".join(f", a{i}: usize" for i in range(k))
+        # The inner `unsafe {}` is what edition 2024 requires (unsafe_op_in_unsafe_fn)
+        # and is accepted silently by the older editions.
         out += f"#[inline]\nunsafe fn dsn_call{k}(n: usize{params}) -> i32 {{\n    let r: i32;\n"
-        out += '    core::arch::asm!(\n        "ecall",\n        in("a7") n,\n'
-        out += "        out(\"a0\") r,\n" if k == 0 else "        inlateout(\"a0\") a0 => r,\n"
-        out += "".join(f'        in("a{i}") a{i},\n' for i in range(1, k))
-        out += "        options(nostack),\n    );\n    r\n}\n"
+        out += '    unsafe {\n        core::arch::asm!(\n            "ecall",\n            in("a7") n,\n'
+        out += "            out(\"a0\") r,\n" if k == 0 else "            inlateout(\"a0\") a0 => r,\n"
+        out += "".join(f'            in("a{i}") a{i},\n' for i in range(1, k))
+        out += "            options(nostack),\n        );\n    }\n    r\n}\n"
     out += "\n"
     rn = lambda s: s + "_" if s in RUST_KW else s
     outs_by_call = [{a for t, a in c["params"] if t == "out"} for c in calls]

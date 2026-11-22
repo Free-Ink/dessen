@@ -45,6 +45,12 @@ class FreeInkHost {
   State step(freeink::ui::DrawTarget& target, const freeink::ui::DeviceContext& device,
              const freeink::ui::InputSnapshot& input, Swipe swipe = SwipeNone, uint32_t budget = 200000);
 
+  // The input passed to the next step() came from a Left or Right key, not Up
+  // or Down, so its PREV/NEXT carries DSN_EV_SIDEWAYS. A firmware that folds
+  // both pairs into InputSnapshot::prev/next calls this just before that step;
+  // the step consumes it whatever state the app is in.
+  void markSideways() { sideways_ = true; }
+
   // Entropy for the app's random() call, e.g. esp_random. Without one the
   // app gets a weak fallback sequence, fine for tests and nothing else.
   void setRandom(uint32_t (*source)()) { random_ = source; }
@@ -65,6 +71,8 @@ class FreeInkHost {
   int beginWifi();
   int requestLaunch(int kind, const uint8_t* path, uint32_t pathLen); // open_book/settings/browser
   int requestLaunchHome(int dest);                                   // open_home
+  int setClip(int32_t x, int32_t y, int32_t w, int32_t h);           // set_clip
+  int buttonHints(const uint8_t* labels, uint32_t len);              // button_hints
   Services* services() const { return services_; }
 
   // After step() returns State::Launch, what the app asked to open and (for the
@@ -98,6 +106,11 @@ class FreeInkHost {
   int launchHomeDest_ = 0;
   freeink::ui::DrawTarget* target_ = nullptr;
   freeink::ui::DeviceContext device_{};
+  freeink::ui::Rect clip_{};      // the app's clip, panel coordinates
+  freeink::ui::Rect outerClip_{}; // the firmware's, restored after each step
+  bool clipped_ = false;
+  bool clipTouched_ = false;
+  bool sideways_ = false;
 
  public:
   void randomBytesInto(uint8_t* out, uint32_t n); // fills from service or fallback

@@ -112,7 +112,10 @@ and a buttons-only one:
 
 - `CONFIRM` / `BACK` — the confirm/back keys (activate / go back).
 - `PREV` / `NEXT` — the up/down keys (and focus-prev/next). Use them to **move a
-  selection**, not to page.
+  selection**, not to page. Left and Right arrive as `PREV` and `NEXT` too, with
+  `DSN_EV_SIDEWAYS` set in the event, so an app that only reads `DSN_EV_TYPE(e)`
+  treats both pairs alike, and one that wants a second axis can tell them apart.
+  (The firmware has to mark them; until it does, the flag never appears.)
 - `TAP` / `LONG_PRESS` — a touch and a press-and-hold; both carry `x, y`
   (`DSN_EV_X/Y(e)`).
 - `SWIPE_UP` / `SWIPE_DOWN` / `SWIPE_LEFT` / `SWIPE_RIGHT` — the four touch
@@ -133,6 +136,14 @@ still wipes the whole panel. Taps on the bezel are not delivered. Call
 `dsn_device()` if you want the raw panel size, the insets, the minimum
 comfortable tap size, or whether the board has touch.
 
+Button hints are the host's to draw, in its own look and over its own keys:
+call `dsn_button_hints("Back\nSelect\nUp\nDown", len)` with one label per
+action (back, confirm, previous, next; an empty line for none), after drawing
+the screen and before `dsn_refresh()`. `dsn_device()` reports `hint_height`,
+the band along the bottom it draws in: keep that clear. It is 0 where the
+device shows no hints (a touch board, no keys, or turned), and then the call
+does nothing, so an app can make it everywhere.
+
 ## The API
 
 Fonts, colors, and text are the firmware's own, so your app matches the device.
@@ -143,7 +154,7 @@ surface:
 | Call | Does |
 |---|---|
 | `dsn_screen_width() / _height()` | Safe-area size |
-| `dsn_device(&info, sizeof info)` | Panel size, insets, touch/button flags, orientation |
+| `dsn_device(&info, sizeof info)` | Panel size, insets, touch/button flags, orientation, button-hint band |
 | `dsn_wait_event() -> e` | Block for the next event; decode with `DSN_EV_TYPE/X/Y(e)` |
 | `dsn_exit(code)` | Quit (also happens if `main` returns) |
 | `dsn_random() -> u32` | Hardware random number |
@@ -158,6 +169,8 @@ surface:
 | `dsn_measure_text(s,len,font,flags) -> u32` | `width<<16 \| height` before drawing |
 | `dsn_line_height(font) -> px` | Line height of a font |
 | `dsn_bitmap(x,y,w,h,data,len,bw,bh,format,mode,color,rotation)` -> 0/-1 | 1-bit image |
+| `dsn_set_clip(x,y,w,h)` -> 0/error | Limit every later draw to a rectangle, until the next call; a negative width lifts it. Kept between events, never applied to the firmware's own drawing |
+| `dsn_button_hints(labels, len)` -> 0/error | The host draws its own button hints: back, confirm, previous, next, one per line (empty: none). Nothing where `hint_height` is 0; -1 for over four lines, a control byte, or a label over `DSN_HINT_LABEL_MAX` bytes |
 | `dsn_recent_shelf(first,count,list,len)` -> bytes or error | Recently opened books first, then recently added books. Use a zero-based `first` and a `count` up to `DSN_SHELF_PAGE_MAX`. Each row is `path<TAB>title<TAB>author<TAB>-1<LF>` or a blank line for an unreadable entry. Zero means end of shelf. |
 
 Advance `first` by the number of lines you received, including blank lines.
@@ -165,7 +178,10 @@ Allow `DSN_SHELF_RECORD_MAX` bytes per requested row to fit a full page. Use
 `dsn_book_progress()` for the reading progress of visible books. Rebuild the
 firmware and app binaries together when migrating to the recent shelf call.
 
-Colors: `DSN_WHITE / DSN_BLACK / DSN_LIGHT_GRAY / DSN_DARK_GRAY`.
+Colors: `DSN_WHITE / DSN_BLACK / DSN_LIGHT_GRAY / DSN_DARK_GRAY`, and for
+`dsn_fill` only `DSN_SCRIM`: light-gray ink over what is already there, for
+dimming behind a dialog. Whether the background shows through depends on the
+firmware's renderer; on one that cannot, it looks like `DSN_LIGHT_GRAY`.
 Fonts: `DSN_FONT_SMALL / _BODY / _TITLE`. Text flags: `DSN_TEXT_BOLD / _INVERTED`.
 
 Calls that can fail on bad input (`text_box`, `bitmap`) return `-1`; check it
@@ -328,6 +344,34 @@ The `vars` object carries the event's fields (`book`, `percent`, `title`, …).
 Events route to `app-events.jsonl`, never the network outbox, so the firmware's
 own event delivery never touches or deletes your queue.
 
+## Which boards an app needs
+
+Most apps need nothing in particular: they offer a touch path and a button path
+and run on every board. An app that is unusable without one kind of input says
+so in its manifest:
+
+```json
+{ "title": "Sketch", "description": "Draw with a finger", "requires": ["touch"] }
+```
+
+| `requires` | meaning |
+|---|---|
+| absent or `[]` | runs on any board (the norm) |
+| `["touch"]` | needs a touch panel |
+| `["buttons"]` | needs physical keys |
+
+A launcher reads this **before** the app runs, to decide whether to offer it on
+this board; a host that meets a word it does not know treats the app as not
+runnable rather than guess. It is not how a running app adapts. That comes from
+`dsn_device`: `has_touch` and `has_buttons` for navigation, `hint_height` for
+whether button hints show. The same app gets hints on a buttons-only board and
+none on a touch board, which no fixed manifest value could say.
+
+On the desktop, `DESSEN_BOARD=touch|buttons|both` picks the board (default:
+buttons, no touch) and `DESSEN_MANIFEST=apps/<app>.json` the manifest to check;
+a `manifest.json` beside the image is checked too. When the board falls short,
+the runner exits with 103 instead of starting the app.
+
 ## Getting it onto a device
 
 ```sh
@@ -336,7 +380,7 @@ make sd
 
 stages `build/sd/plugins/<app>/` folders, each with `app.bin` and a
 `manifest.json` (copied from `apps/<app>.json` — `title` and `description` show
-in the menu). Copy the folder into `/plugins/` on the reader's SD card, then:
+in the menu, and `requires`, below, says which boards can drive the app). Copy the folder into `/plugins/` on the reader's SD card, then:
 
 1. **Settings → Connectivity → Plugins** (enable).
 2. **Home → Plugins → <your app>**.
@@ -384,16 +428,67 @@ in all three languages, with the ABI's arg-packing handled for you:
   builds with `make build/<name>.bin`.
 - [`apps/hello.zig`](../apps/hello.zig) — **Zig** (freestanding, no std).
   `@import` the `dsn` module (`sdk/dessen.zig`), then `dsn.clear()`, `dsn.text_box(…)`.
-  `make zig` (one-time: install Zig).
+  `make zig` (one-time: install Zig). Or with Zig alone: `zig build` writes
+  `zig-out/bin/hello_zig.bin` (the same image, linked by Zig instead of gcc) and
+  `zig build run` runs it; a new Zig app is one entry in `apps` in
+  [`build.zig`](../build.zig). zls reads the same file, so `dsn.*` resolves in the editor.
 
-`make sd` stages these too (as `hello_rs/` and `hello_zig/`, with manifests
-from `apps/hello_rs.json` and `apps/hello_zig.json`) whenever the matching
-toolchain is installed, and skips them otherwise. To choose explicitly, pass
-`make sd SD_LANG_APPS="hello_rs"`, or `SD_LANG_APPS=""` for C only.
+Rust is part of the normal build: `make test` builds and checks the Rust apps
+along with the C ones, and `make sd` stages them (`hello_rs/`, `readstats/`). Both stop with the install command
+if the riscv32im target is missing; `make test RUST=no` / `make sd RUST=no`
+leaves Rust out. Zig is staged as `hello_zig/` whenever Zig is installed. To
+pick the staged apps by hand, pass `make sd SD_LANG_APPS="hello_rs"`, or
+`SD_LANG_APPS=""` for C only.
 
 The output is the same kind of image as a C app: RV32IM code for the dessen VM,
 not for the reader's chip. One `app.bin` runs on every board, ESP32-C3 (RISC-V)
 and ESP32-S3 (Xtensa) alike. Only the firmware is built per chip.
+
+### The Rust SDK crate
+
+For a Rust app built with `cargo`, depend on the `dessen` crate in
+[`sdk/rust/`](../sdk/rust) instead of `include!`-ing `sdk/dessen.rs`. It has no
+dependencies, and it gives you:
+
+- the calls, from the same generated `sdk/dessen.rs`;
+- every `DSN_*` constant from `sdk/dessen_abi.h` (events, colours, fonts,
+  errors), generated at build time, so nothing is copied by hand;
+- with the default `rt` feature, the image header, `_start` and a panic
+  handler (the Rust counterpart of `crt0.S`; a panic exits with
+  `dessen::PANIC_EXIT_CODE`, `0x70`), plus the link script;
+- with the `heap` feature, `dessen::heap!(SIZE)`: an allocator over a static
+  array, for apps that use `alloc`. The heap counts against the app's memory;
+- `dessen::main!(run)`, which writes the entry point `_start` calls, so an app
+  needs no `unsafe` and can carry `#![forbid(unsafe_code)]`;
+- `dessen::ConstStaticCell`, a `static` that hands out `&'static mut` to its
+  value once: state too big for the stack, with no reason to be on the heap.
+
+```toml
+# Cargo.toml
+[dependencies]
+dessen = { path = "../dessen/sdk/rust", features = ["heap"] }
+```
+
+```toml
+# .cargo/config.toml
+[build]
+target = "riscv32im-unknown-none-elf"
+[target.riscv32im-unknown-none-elf]
+rustflags = ["-C", "link-arg=-Tdessen.ld"]   # add "-C", "link-arg=--defsym=APP_MEM=131072" for 128 KB,
+                                             # and "-C", "link-arg=--defsym=APP_STACK=8192" to ask only
+                                             # for code + data + heap + that stack
+```
+
+Or size the stack in the app itself, next to its heap: `dessen::stack!(4096)`
+makes the header ask for code, data and heap plus exactly that much stack, and
+wins over `APP_STACK`. A stack that runs out writes over the heap below it with
+no fault to say so, so size it from a measured peak with room to spare.
+
+`cargo build --release` then links with Rust's own `rust-lld`; no gcc or
+`crt0.S` is involved. `objcopy -O binary` the ELF into `app.bin`.
+[`sdk/rust/examples/selftest_rs.rs`](../sdk/rust/examples/selftest_rs.rs) is a
+complete app, and `make rust-sdk` builds and runs it along with the heap's unit
+tests.
 
 Freestanding **C++** works the same way. The one hard rule: target plain `im`,
 never `imc` — the VM only decodes 32-bit instructions, so a compressed

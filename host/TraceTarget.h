@@ -31,7 +31,7 @@ struct TraceTarget final : freeink::ui::DrawTarget {
   Rect clip_{0, 0, 32767, 32767};
   Rect clipRect() const override { return clip_; }
   bool setClipRect(Rect r) override { clip_ = r; add("clip " + at(r)); return true; }
-  void fill(Rect r, Paint p, uint8_t, uint8_t) override { add("fill " + at(r) + " c" + std::to_string(static_cast<int>(p.color))); }
+  void fill(Rect r, Paint p, uint8_t, uint8_t) override { add("fill " + at(r) + " c" + std::to_string(static_cast<int>(p.color)) + (p.kind == freeink::ui::PaintKind::Dither ? " d" : "")); }
   void stroke(Rect r, Paint, uint8_t width, uint8_t, uint8_t) override { add("stroke " + at(r) + " w" + std::to_string(width)); }
   void line(Point from, Point to, uint8_t, Paint) override {
     lines++;
