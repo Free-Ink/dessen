@@ -4,7 +4,16 @@
 
 [workspace]
 resolver = "3"
-members = ["dice", "hello", "home", "kit", "lightsout", "minimal", "sudoku"]
+members = [
+    "dice",
+    "hello",
+    "home",
+    "kit",
+    "lightsout",
+    "minimal",
+    "sudoku",
+    "readstats",
+]
 
 [workspace.package]
 version = "0.1.0"
