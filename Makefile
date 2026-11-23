@@ -9,15 +9,17 @@ APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest a
 SD_APPS = hello lightsout dice sudoku home minimal
 
 # Rust is part of `make test` and `make sd`: the Rust SDK, the hand-linked Rust
-# apps (hello_rs, readstats) are built, checked and staged alongside the C
-# ones. It needs the riscv32im target (`make rust-check` says how to add it).
-# RUST=no leaves Rust out.
+# apps (hello_rs, readstats) and the xpui versions of the C apps (apps/xpui) are
+# built, checked and staged alongside the C ones. It needs the riscv32im target
+# (`make rust-check` says how to add it); the xpui apps fetch xpui and its
+# dessen backend from git. RUST=no leaves Rust out.
 # Zig joins `make sd` when its toolchain is installed.
 RUST ?= yes
 HAVE_RUST := $(shell rustup target list --installed 2>/dev/null | grep -qx riscv32im-unknown-none-elf && echo y)
 HAVE_ZIG := $(shell command -v zig >/dev/null 2>&1 && echo y)
+XPUI_APPS = hello dice lightsout sudoku minimal home readstats
 WITH_RUST := $(filter yes,$(RUST))
-SD_LANG_APPS ?= $(if $(WITH_RUST),hello_rs readstats) $(if $(HAVE_ZIG),hello_zig)
+SD_LANG_APPS ?= $(if $(WITH_RUST),hello_rs readstats $(XPUI_APPS:%=%_xpui)) $(if $(HAVE_ZIG),hello_zig)
 
 # FreeInk SDK checkout, used read-only for its UI headers.
 FREEINK_SDK ?= ../freeink-sdk
@@ -67,7 +69,7 @@ build/%.bin: apps/%.c sdk/crt0.S sdk/rt.c sdk/app.ld sdk/dessen.h sdk/dessen_abi
 
 # Exit codes: selftest 0 = all checks pass; hello returns the event it got
 # (c = confirm = 1); oob must fault (101 = memory fault).
-test: $(if $(WITH_RUST),rust-check) all $(if $(WITH_RUST),rust)
+test: $(if $(WITH_RUST),rust-check) all $(if $(WITH_RUST),rust xpui)
 	build/dessen build/selftest.bin
 	printf c | build/dessen build/hello.bin; test $$? -eq 1
 	build/dessen build/oob.bin; test $$? -eq 101
@@ -107,6 +109,13 @@ rust-check:
 sd: $(if $(WITH_RUST),rust-check) all $(SD_LANG_APPS:%=build/%.bin)
 	@for a in $(SD_APPS) $(SD_LANG_APPS); do mkdir -p build/sd/plugins/$$a && cp build/$$a.bin build/sd/plugins/$$a/app.bin \
 	  && cp apps/$$a.json build/sd/plugins/$$a/manifest.json; done; ls build/sd/plugins
+
+# What each xpui app costs in code, data and memory (flags any over 64 KB), and
+# the heap and stack peaks its heap!/stack! are sized from.
+xpui-sizes: xpui-build $(XPUI_APPS:%=build/%_xpui.bin)
+	@tools/sizes.sh
+xpui-peaks: xpui-build $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
+	@tools/peaks.sh
 
 # Report FreeInk SDK surface that dessen does not yet expose, and SDK pin drift.
 # Does not change code — exposing a method is a judgment call (see AGENTS.md).
@@ -167,10 +176,34 @@ rust-sdk: build/selftest_rs.bin build/dessen
 	build/dessen build/selftest_rs.bin
 	@echo "rust sdk: PASS"
 
+# The xpui apps: one cargo build for the workspace, then each image cut out
+# of its ELF. Every app is checked on the VM with scripted keys.
+XPUI_OUT = build/xpui/riscv32im-unknown-none-elf/release
+xpui-build: $(GEN)
+	cd apps/xpui && $(RUST_SDK) build --release --target-dir ../../build/xpui
+
+$(XPUI_APPS:%=build/%_xpui.bin): build/%_xpui.bin: xpui-build
+	$(RISCV)objcopy -O binary $(XPUI_OUT)/$*_xpui $@
+
+xpui: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
+	printf b | build/dessen build/hello_xpui.bin | grep -q 'Hello from xpui'
+	printf ncb | build/dessen build/lightsout_xpui.bin | grep -q 'Moves 1'
+	printf cb | build/dessen build/dice_xpui.bin | grep -q 'Last:  d20='
+	printf ncb | build/dessen build/sudoku_xpui.bin | grep -q 'cells left'
+	printf c | build/dessen build/minimal_xpui.bin | grep -q 'launch reader /books/dune.epub'
+	printf nnnc | build/dessen build/minimal_xpui.bin | grep -q 'launch app /plugins/dice/app.bin'
+	printf b | build/dessen build/minimal_xpui.bin | grep -q 'Library'
+	printf c | build/dessen build/home_xpui.bin | grep -q 'launch reader /books/dune.epub'
+	printf nc | build/dessen build/home_xpui.bin | grep -q 'launch reader /books/hyperion.epub'
+	printf nnc | build/dessen build/home_xpui.bin | grep -q 'launch reader /books/neuromancer.epub'
+	build/dessen build/home_xpui.bin </dev/null | grep -q '37%'
+	$(call readstats_check,build/readstats_xpui.bin)
+	@echo "xpui apps: PASS"
+
 # The reading-stats checks, for a build of it ($(1)): the cards from a generated
 # session log (tools/readstats_fixture.py), the empty state, an import from
 # CrossPoint Sync, and launching from the book card and an app icon. Run for
-# the Rust app.
+# both the Rust app and its xpui version.
 define readstats_check
 	@fs=$$(mktemp -d); python3 tools/readstats_fixture.py $$fs; \
 	  out=$$(printf nnnnnnnnnnbb | DESSEN_FS_ROOT=$$fs build/dessen $(1)); rc=$$?; rm -rf $$fs; \
@@ -220,4 +253,4 @@ zig: build/hello_zig.bin build/dessen
 clean:
 	rm -rf build
 
-.PHONY: all test sd sync sync-accept size rust rust-check rust-sdk zig clean
+.PHONY: all test sd sync sync-accept size rust rust-check rust-sdk xpui xpui-build xpui-sizes xpui-peaks zig clean

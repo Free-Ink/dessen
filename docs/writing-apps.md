@@ -434,7 +434,8 @@ in all three languages, with the ABI's arg-packing handled for you:
   [`build.zig`](../build.zig). zls reads the same file, so `dsn.*` resolves in the editor.
 
 Rust is part of the normal build: `make test` builds and checks the Rust apps
-along with the C ones, and `make sd` stages them (`hello_rs/`, `readstats/`). Both stop with the install command
+(and the xpui ones below) along with the C ones, and `make sd` stages them
+(`hello_rs/`, `readstats/`, `<name>_xpui/`). Both stop with the install command
 if the riscv32im target is missing; `make test RUST=no` / `make sd RUST=no`
 leaves Rust out. Zig is staged as `hello_zig/` whenever Zig is installed. To
 pick the staged apps by hand, pass `make sd SD_LANG_APPS="hello_rs"`, or
@@ -457,11 +458,7 @@ dependencies, and it gives you:
   handler (the Rust counterpart of `crt0.S`; a panic exits with
   `dessen::PANIC_EXIT_CODE`, `0x70`), plus the link script;
 - with the `heap` feature, `dessen::heap!(SIZE)`: an allocator over a static
-  array, for apps that use `alloc`. The heap counts against the app's memory;
-- `dessen::main!(run)`, which writes the entry point `_start` calls, so an app
-  needs no `unsafe` and can carry `#![forbid(unsafe_code)]`;
-- `dessen::ConstStaticCell`, a `static` that hands out `&'static mut` to its
-  value once: state too big for the stack, with no reason to be on the heap.
+  array, for apps that use `alloc`. The heap counts against the app's memory.
 
 ```toml
 # Cargo.toml
@@ -489,6 +486,146 @@ no fault to say so, so size it from a measured peak with room to spare.
 [`sdk/rust/examples/selftest_rs.rs`](../sdk/rust/examples/selftest_rs.rs) is a
 complete app, and `make rust-sdk` builds and runs it along with the heap's unit
 tests.
+
+### Apps built with xpui
+
+[`apps/xpui/`](../apps/xpui) holds Rust versions of hello, dice, Lights Out,
+Sudoku and the three home launchers (minimal, Recents and Reading Stats),
+written against
+[xpui](https://github.com/XPUI-Framework/xpui-framework) and drawn through its
+dessen backend, `xpui-dessen` (in xpui-backends). The C apps stay; these are
+parallel versions. A screen is a type with `body()` and `update()`; xpui lays
+it out, draws the header, moves focus and routes taps, and the backend turns
+each dessen event into the input xpui polls. Button hints are the host's: the
+backend keeps `hint_height` clear and hands each action's label to
+`dsn_button_hints`, and the host draws them as its own screens do. A touch
+board reports no band, so it shows no hints and its content keeps that space.
+
+```rust
+#![no_std]
+#![no_main]
+#![forbid(unsafe_code)]
+
+use xpui::{App, NavigationScreen, Screen, Text, View, vstack};
+
+dessen::heap!(1024);
+dessen::stack!(2560);
+
+struct Hello;
+
+impl Screen for Hello {
+    type Message = ();
+    fn title(&self) -> Option<&'static str> { Some("Hello") }
+    fn body(&self) -> impl View<()> {
+        NavigationScreen::new(vstack![16; Text::new("Hello from xpui")])
+    }
+    fn update(&mut self, _message: ()) {}
+}
+
+fn app() -> App {
+    App::new(Hello)
+}
+
+xpui_dessen::main!(app); // returns when Back leaves the screen
+```
+
+**An app needs no `unsafe`.** `xpui_dessen::main!` writes the entry point the
+image's `_start` calls (a plain `dessen` app uses `dessen::main!(run)` for
+the same), installs the backend and runs the app, so every app in
+`apps/xpui/` and the shared `kit` crate carries `#![forbid(unsafe_code)]`.
+State too big for the stack and with no reason to be on the heap goes in a
+`dessen::ConstStaticCell`, which hands out `&'static mut` to its value once:
+
+```rust
+static STATS: dessen::ConstStaticCell<Stats> = dessen::ConstStaticCell::new(Stats::ZERO);
+let stats: &'static mut Stats = STATS.take().expect("taken once");
+```
+
+The apps build with `--cfg xpui_static_host` (in `apps/xpui/.cargo/config.toml`):
+xpui then calls the backend through named functions instead of a table of
+function pointers, so the linker drops every host method an app never calls
+(hello keeps 24 of 43). Without it every image carried all of them, about
+7 KB.
+
+Taps on the desktop runner need a board with touch: `DESSEN_BOARD=both`
+(or `touch`), since the default board has keys only and drops `t<x>,<y>;`.
+
+`make xpui` builds all seven into `build/<name>_xpui.bin` and checks each on the
+VM, the launchers with the same checks as their C and Rust versions; `make test`
+and `make sd` include them. Cargo fetches xpui and its dessen backend from
+git the first time, so that build needs the network.
+
+Each app asks only for the memory it uses, which matters on an ESP32-C3: the
+firmware needs the whole block in one piece of internal RAM, and on dessen the
+code is RAM too, since the VM loads the whole image. Each app's `main.rs` sets
+its heap with `dessen::heap!` and its stack with `dessen::stack!`, from the
+peaks measured on the VM (covers at full size, portrait screens up to
+1072×1448, keys and taps): the heap gets 40% or 512 bytes more, whichever is
+larger, and the stack 25% or 1 KB, rounded up to 256 bytes; `make xpui-peaks`
+measures them again and `make xpui-sizes` prints what each image asks for.
+`APP_MEM=65536` makes the link fail for an app past the 64 KB every dessen
+app must fit in.
+
+| App | Asks for | Code + data | Heap (peak) | Stack (deepest) |
+|---|---|---|---|---|
+| hello | 19.5 KB | 16.2 KB | 1.0 KB (0.3 KB) | 2.2 KB (1.2 KB) |
+| dice | 27.3 KB | 23.5 KB | 1.2 KB (0.6 KB) | 2.5 KB (1.4 KB) |
+| lightsout | 23.7 KB | 19.9 KB | 1.2 KB (0.6 KB) | 2.5 KB (1.4 KB) |
+| minimal | 25.2 KB | 20.7 KB | 1.8 KB (1.0 KB) | 2.8 KB (1.7 KB) |
+| sudoku | 30.3 KB | 23.1 KB | 1.8 KB (1.0 KB) | 5.5 KB (4.3 KB) |
+| home (Recents) | 41.3 KB | 27.0 KB | 11.8 KB (8.4 KB) | 2.5 KB (1.4 KB) |
+| readstats | 61.4 KB | 43.5 KB | 9.2 KB (6.5 KB) | 6.0 KB (4.7 KB, importing) |
+
+About 15 KB of every image is xpui itself, its dessen backend and the chrome
+it draws; hello's own code is a few hundred bytes. What keeps the rest small:
+
+- **No `format!`.** It links Rust's formatting machinery, 3 to 5 KB of every
+  image that uses it. `kit::join!("Level ", level)` puts words and numbers
+  together without it.
+- **No interaction per cell.** xpui keeps 48 bytes for each one, so an
+  `xpui::CellGrid` declares one for the whole board and works out the cell
+  from where the tap landed.
+- **No 64-bit division.** It is a library routine on RV32, over a kilobyte;
+  the chrome scales its bars with a 32-bit long division instead, and the
+  apps keep their own arithmetic in 32 bits.
+- **Images go to the firmware as they are.** xpui's 1-bit images are already
+  dessen's `DSN_BITMAP_MASK` format, so the backend passes the app's bytes
+  straight to `dsn_bitmap`, with no copy.
+- **One buffer per cover.** `kit::Bitmap::cover` sizes its buffer from the
+  height asked for, decodes the cover in it, and cuts it down in place: the
+  SDK heap shrinks a block where it is, and grows one into free space right
+  after it, so neither needs room for a second copy.
+- **Reading Stats keeps titles in the log.** Its tally of 64 books holds each
+  title's offset in the session log, and reads back only the three it shows.
+
+Things to know:
+
+- **Back on the root screen ends the app.** A home launcher claims it in
+  `on_key` instead, as `minimal` does; Recents opens Files with it.
+- **The apps share `apps/xpui/kit`:** `kit::shelf` reads the recents
+  shelf, `kit::Bitmap` draws a cover or a bundled icon (dessen's 1-bit format),
+  `kit::text` and `kit::Face` place a line of text in a box in any of the
+  firmware's three faces, `kit::status` builds the clock/battery title, and
+  `kit::join!` builds strings.
+- **Covers load before the page draws.** The C Recents shows a page, then pops
+  each cover in on its own redraw; xpui only repaints after an event, so the
+  xpui version fetches a page's covers first (slow only the first time the
+  firmware decodes one).
+- **Custom drawing is a `View`.** The puzzles draw their boards with
+  `xpui::CellGrid`, which sizes square cells to the space given, paints each
+  through one closure and sends `on_cell_tap(index)` for a tap;
+  `kit::digit` draws seven-segment numbers.
+- **Keys reach the screen first** through `on_key`, so a game can claim Up,
+  Down and Confirm for its cursor. `kit::step` moves a cursor along a row with
+  Left/Right, when the board sends them, and through every cell with Up/Down.
+- **Clipping is real** through `dsn_set_clip`, so a `ScrollView` stays inside
+  its frame. A dialog's dimmed backdrop uses `DSN_SCRIM`, and dims only where
+  the firmware's renderer supports it.
+- **The apps build from git:** xpui, xpui-chrome and xpui-backends'
+  `dessen-support` branch. To build against local checkouts instead, copy
+  `apps/xpui/.cargo/local.toml.example` to `local.toml` (git ignores it) and
+  fix its paths: `.cargo/config.toml` includes it when it exists. A patch only
+  replaces a branch that is on the remote, so push a branch before patching it.
 
 Freestanding **C++** works the same way. The one hard rule: target plain `im`,
 never `imc` — the VM only decodes 32-bit instructions, so a compressed

@@ -22,6 +22,7 @@ tools/gen_api.py generates sdk/dessen_calls.h, sdk/dessen_sysnums.h,
                  (sdk/dessen.rs, sdk/dessen.zig) from the .api file
 freeink/       the host binding: maps calls onto freeink::ui types (FreeInkHost)
 apps/          example + test apps (.c) with menu manifests (.json)
+apps/xpui/     Rust versions of the apps (and launchers) on the xpui framework (make xpui)
 host/          desktop runner (main.cpp) + TraceTarget for printing/asserting
 ```
 
@@ -55,8 +56,8 @@ the **crosspoint-reader** repo on branch `feat/dessen-apps`, behind
 
 ```sh
 make test     # generate, build VM + C and Rust apps, run the suite  ← run this after any change
-make sd       # stage build/sd/plugins/<app>/ (C and Rust apps) for an SD card
-make test RUST=no   # C only, when Rust (the riscv32im target) is absent
+make sd       # stage build/sd/plugins/<app>/ (C, Rust and xpui apps) for an SD card
+make test RUST=no   # C only, when Rust (riscv32im target) or xpui-backends is absent
 make size     # ESP32-C3 flash cost of the VM and the binding
 zig build     # the Zig apps with Zig alone (build.zig, also read by zls); zig build run -Dapp=hello
 make FREEINK_SDK=/path/to/freeink-sdk test   # if the SDK isn't a sibling dir

@@ -17,3 +17,6 @@ debug/
 target/
 **/*.rs.bk
 *.pdb
+
+# Local [patch] overrides for the xpui apps (see apps/xpui/.cargo/local.toml.example).
+apps/xpui/.cargo/local.toml
