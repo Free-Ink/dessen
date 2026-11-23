@@ -19,6 +19,8 @@
 #include <string_view>
 #include <vector>
 
+#include <FreeInkUICore.h>
+
 #include "../sdk/dessen_abi.h"
 
 namespace dessen {
@@ -157,6 +159,24 @@ const EVP_MD* mdFor(int algo) {
 }
 
 }  // namespace
+
+// Four equal boxes across the band, each label centred in its own.
+void DesktopServices::drawButtonHints(freeink::ui::DrawTarget& target, const freeink::ui::Rect& band,
+                                      const char* const labels[4]) {
+  using namespace freeink::ui;
+  const int16_t width = static_cast<int16_t>(band.width / 4);
+  for (int i = 0; i < 4; i++) {
+    if (!labels[i][0]) continue;
+    const Rect box{static_cast<int16_t>(band.x + i * width), band.y, width, band.height};
+    target.fill(box, Paint::solid(Color::White), 0, 0);
+    target.stroke(box, Paint::solid(Color::Black), 1, 0, 0);
+    TextStyle style;
+    style.font = DSN_FONT_SMALL;
+    style.align = TextAlign::Center;
+    const int16_t line = target.lineHeight(style.font);
+    target.text(Rect{box.x, static_cast<int16_t>(box.y + (box.height - line) / 2), box.width, line}, labels[i], style);
+  }
+}
 
 DesktopServices::DesktopServices(std::string fsRoot, std::string appDir, std::string netRoot)
     : fsRoot_(std::move(fsRoot)), appDir_(std::move(appDir)), netRoot_(std::move(netRoot)) {}
@@ -556,3 +576,12 @@ int DesktopServices::keygenStart(uint32_t bits, uint8_t* pub, uint32_t pubCap, u
 }
 
 }  // namespace dessen
+
+int dessen::DesktopServices::bookCover(const char*, uint32_t height, uint8_t* out, uint32_t cap) {
+  if (!fakeCovers || height == 0 || height > 2000) return 0;
+  const uint32_t w = height * 2 / 3, n = 4 + (w + 7) / 8 * height;
+  if (n > cap) return DSN_ERR_TOO_BIG;
+  out[0] = w & 0xff, out[1] = w >> 8, out[2] = height & 0xff, out[3] = height >> 8;
+  for (uint32_t i = 4; i < n; ++i) out[i] = static_cast<uint8_t>(i * 37);
+  return static_cast<int>(n);
+}

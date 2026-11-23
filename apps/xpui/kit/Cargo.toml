@@ -1,0 +1,11 @@
+[package]
+name = "kit"
+description = "What the XPUI ports of dessen's apps share: big digits, a grid of cells, text, covers and the shelf."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+xpui.workspace = true
+dessen.workspace = true

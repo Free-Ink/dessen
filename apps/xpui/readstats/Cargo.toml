@@ -1,0 +1,18 @@
+[package]
+name = "readstats_xpui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "readstats_xpui"
+path = "src/main.rs"
+test = false
+bench = false
+
+[dependencies]
+xpui.workspace = true
+xpui-dessen.workspace = true
+dessen.workspace = true
+kit.workspace = true

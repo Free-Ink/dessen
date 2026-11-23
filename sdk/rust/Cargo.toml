@@ -1,0 +1,30 @@
+# The dessen app SDK for Rust: the generated ecall wrappers, the image header
+# and entry point, a panic handler, and an optional heap. No dependencies.
+#
+# Build an app for the VM with:
+#   cargo build --release --target riscv32im-unknown-none-elf
+# then `objcopy -O binary` the ELF into app.bin. Target `riscv32im`, never
+# `riscv32imc`: the VM does not decode compressed instructions.
+[package]
+name = "dessen"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Rust SDK for dessen apps: syscalls, entry point and heap for the dessen RV32IM sandbox"
+links = "dessen"
+build = "build.rs"
+
+[features]
+default = ["rt"]
+# The image header, `_start`, a panic handler, and the `app.ld` link script.
+# Turn it off to supply your own (for example, to link with gcc and crt0.S).
+rt = []
+# `dessen::heap!` and the allocator behind it, for apps that use `alloc`.
+heap = []
+
+[lib]
+path = "src/lib.rs"
+
+[[example]]
+name = "selftest_rs"
+required-features = ["heap"]

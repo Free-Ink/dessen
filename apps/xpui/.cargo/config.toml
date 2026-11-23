@@ -1,0 +1,26 @@
+# Every app is a dessen image: RV32IM (the VM decodes no compressed
+# instructions), linked by dessen's app.ld. Each app asks for what it uses:
+# code, data, and the heap and stack its main.rs sets with `dessen::heap!` and
+# `dessen::stack!`, sized from measured peaks with room to spare
+# (`make xpui-peaks`). APP_STACK is only the stack of an app that sets none.
+# APP_MEM is the 64 KB every dessen app must fit in: the link fails past it.
+
+# Building against local checkouts of xpui, xpui-chrome or xpui-backends: put
+# a `[patch]` table in .cargo/local.toml (ignored by git; see
+# local.toml.example). Without the file the git dependencies are used.
+include = [{ path = "local.toml", optional = true }]
+
+[build]
+target = "riscv32im-unknown-none-elf"
+
+[target.riscv32im-unknown-none-elf]
+rustflags = [
+    "-C", "link-arg=-Tdessen.ld",
+    "-C", "link-arg=--defsym=APP_MEM=65536",
+    "-C", "link-arg=--defsym=APP_STACK=8192",
+    # xpui reaches its host by name, not through a vtable, so an app links
+    # only the drawing it uses (xpui's src/host/linked.rs).
+    "--cfg", "xpui_static_host",
+    # Fold functions whose code came out identical (generic copies, mostly).
+    "-C", "link-arg=--icf=all",
+]
