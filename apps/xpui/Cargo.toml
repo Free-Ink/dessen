@@ -23,7 +23,7 @@ publish = false
 
 [workspace.dependencies]
 xpui = { git = "https://github.com/XPUI-Framework/xpui-framework", branch = "main" }
-xpui-dessen = { git = "https://github.com/XPUI-Framework/xpui-backends", branch = "dessen-support" }
+xpui-dessen = { git = "https://github.com/XPUI-Framework/xpui-backends", branch = "main" }
 dessen = { path = "../../sdk/rust", features = ["heap"] }
 kit = { path = "kit" }
 

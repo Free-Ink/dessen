@@ -621,8 +621,8 @@ Things to know:
 - **Clipping is real** through `dsn_set_clip`, so a `ScrollView` stays inside
   its frame. A dialog's dimmed backdrop uses `DSN_SCRIM`, and dims only where
   the firmware's renderer supports it.
-- **The apps build from git:** xpui, xpui-chrome and xpui-backends'
-  `dessen-support` branch. To build against local checkouts instead, copy
+- **The apps build from git:** xpui, xpui-chrome and xpui-backends, each
+  from its `main` branch. To build against local checkouts instead, copy
   `apps/xpui/.cargo/local.toml.example` to `local.toml` (git ignores it) and
   fix its paths: `.cargo/config.toml` includes it when it exists. A patch only
   replaces a branch that is on the remote, so push a branch before patching it.
