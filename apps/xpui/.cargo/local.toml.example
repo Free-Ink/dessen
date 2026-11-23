@@ -1,0 +1,16 @@
+# Copy to local.toml (ignored by git) to build the apps against local checkouts
+# instead of the git dependencies in ../Cargo.toml. Paths are relative to
+# apps/xpui and assume ~/Developer/{Freeink/dessen,XPUI/<repo>}; adjust them
+# to your layout. Delete local.toml to go back to the git sources.
+#
+# A patch only replaces a branch that exists on the remote: cargo still
+# fetches the git source, so a branch nobody pushed fails even when patched.
+
+[patch."https://github.com/XPUI-Framework/xpui-framework"]
+xpui = { path = "../../../../XPUI/xpui" }
+
+[patch."https://github.com/XPUI-Framework/xpui-chrome"]
+xpui-chrome = { path = "../../../../XPUI/xpui-chrome" }
+
+[patch."https://github.com/XPUI-Framework/xpui-backends"]
+xpui-dessen = { path = "../../../../XPUI/xpui-backends/dessen" }

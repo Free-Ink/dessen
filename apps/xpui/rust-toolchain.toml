@@ -1,0 +1,5 @@
+# Same pin as xpui-backends, so xpui and its backend see the same compiler.
+[toolchain]
+channel = "1.97.1"
+components = ["rustfmt", "clippy"]
+targets = ["riscv32im-unknown-none-elf"]

@@ -1,0 +1,34 @@
+# The Rust versions of dessen's apps, built on xpui and its dessen backend.
+# The C apps in ../ stay; these are parallel versions, not replacements.
+# `make xpui` builds them into build/<name>_xpui.bin.
+
+[workspace]
+resolver = "3"
+members = []
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+xpui = { git = "https://github.com/XPUI-Framework/xpui-framework", branch = "main" }
+xpui-dessen = { git = "https://github.com/XPUI-Framework/xpui-backends", branch = "dessen-support" }
+dessen = { path = "../../sdk/rust", features = ["heap"] }
+kit = { path = "kit" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
+
+# xpui-dessen fetches the dessen SDK from git; the apps use the one in this
+# repository by path. Two copies would mean two `_start`s, so the git one is
+# replaced by the path one: one SDK crate in every build.
+[patch."https://github.com/Free-Ink/dessen"]
+dessen = { path = "../../sdk/rust" }
