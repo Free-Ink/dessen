@@ -61,7 +61,8 @@ int main(int argc, char** argv) {
     unsigned needs = 0;
     if (!dessen::parseRequires(text.str(), needs))
       return fprintf(stderr, "%s: \"requires\" is not a list of words\n", manifest.c_str()), 2;
-    if (!dessen::meets(needs, screen.hasTouch, screen.hasButtons))
+    const bool hasPsram = getenv("DESSEN_PSRAM") != nullptr;
+    if (!dessen::meets(needs, screen.hasTouch, screen.hasButtons, hasPsram))
       return fprintf(stderr, "%s: this board cannot drive the app\n", manifest.c_str()), 103;
   }
 

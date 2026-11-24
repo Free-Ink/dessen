@@ -74,6 +74,45 @@ is the full human guide. This skill is the working map.
    `DESSEN_BOARD=touch|buttons|both`, `DESSEN_MANIFEST=apps/<name>.json`).
 6. Add a self-check and run `make test`.
 
+## Building screens
+
+Every screen follows the repo's screen standards. The full text is
+[`docs/writing-apps.md#screen-standards`](../../../docs/writing-apps.md#screen-standards)
+and the reference implementation is `apps/xpui/nook` (Book Nook). In short:
+
+- **Bar, content, line**, inside one margin. The bar is one line of body text
+  + 16 px high. No host title band when the bar says where you are.
+- **The bar:** on the root screen a bold label and detail at the left; on a
+  pushed screen a **back arrow** (three 3 px strokes, not xpui's thin
+  chevron), its title, and a rule under the bar (`Bare::pushed` in
+  `apps/xpui/nook/src/view.rs`). Both start 8 px from the top; do not use
+  xpui's taller `NavigationScreen` header. Actions at the right as
+  outlined capsules: at most three, `?` (help) last.
+- **Navigation is a stack:** a second page is a pushed screen
+  (`xpui::present`), not a flag swapping the body. The back arrow pops it
+  (`xpui::finish_screen`), and so does the system Back. Never "tap anywhere to
+  go back".
+- **One primary button** (solid ink) per screen; the rest outlined. Ask before
+  destroying work, with `Modal::confirm`, only when there is work to lose.
+- **Tap targets** at least the bar's height, 8 px apart.
+- **Words:** firmware fonts; Title Case for titles, headings, buttons and
+  dialog choices (`Next Shelf`), sentence case for sentences; one-line labels
+  of at most about 36 characters;
+  the line under the content gives the most useful next step for the current
+  state. Rules and explanations go on a help screen behind `?`.
+- **State on the thing itself:** outlined = to do, solid = done, grey = wrong,
+  a badge on whatever breaks a rule.
+- **Measured layout:** sizes from the screen and `dsn_line_height`, good in
+  portrait and landscape from 480 px to 1448 px.
+- **E-paper:** redraw only on change, same state same picture, no animation.
+- **Game graphics** (pieces, boards, state marks): follow
+  [`docs/drawing-icons.md`](../../../docs/drawing-icons.md). Give every
+  graphic a role (piece, fixture, structure, mark); solid ink shapes layered
+  back to front with a paper edge; one grey for material and shadow; sizes
+  measured from the box; tens of draw calls per piece.
+- **Done means looked at:** render each screen in the simulator, and leave a
+  `make test` check that opens every screen and comes back.
+
 ## The API surface
 
 Every call is a thin wrapper in `sdk/dessen_calls.h` (generated) over one

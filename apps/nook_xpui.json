@@ -1,0 +1,5 @@
+{
+  "title": "Book Nook",
+  "description": "A plant for every book: a bookcase logic puzzle, built with xpui",
+  "requires": ["touch"]
+}

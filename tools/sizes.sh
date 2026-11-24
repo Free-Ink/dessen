@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 ELF=build/xpui/riscv32im-unknown-none-elf/release
 SIZE=$HOME/.platformio/tools/toolchain-riscv32-esp/bin/riscv32-esp-elf-size
 printf '%-10s %7s %7s %7s %7s %8s\n' app text rodata bss image asks
-for app in ${*:-hello dice lightsout minimal sudoku home readstats}; do
+for app in ${*:-hello dice lightsout minimal sudoku nook home readstats}; do
   elf=$ELF/${app}_xpui bin=build/${app}_xpui.bin
   [ -f "$bin" ] || { echo "$app: build/${app}_xpui.bin missing (make xpui)"; continue; }
   set -- $("$SIZE" -A "$elf" | awk '$1==".text"{t=$2} $1==".rodata"{r=$2} $1==".bss"{b=$2} END{print t, r, b}')

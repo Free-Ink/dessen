@@ -16,6 +16,7 @@ namespace dessen {
 enum Need : unsigned {
   NeedTouch = 1u << 0,
   NeedButtons = 1u << 1,
+  NeedPsram = 1u << 2,
   // A requirement this host does not know: it cannot promise to meet it.
   NeedUnknown = 1u << 31,
 };
@@ -46,15 +47,16 @@ inline bool parseRequires(const std::string& json, unsigned& needs) {
     if (end == std::string::npos) return false;
     const std::string word = json.substr(at, end - at);
     if (word.empty() || word.find('\\') != std::string::npos) return false;
-    needs |= word == "touch" ? NeedTouch : word == "buttons" ? NeedButtons : NeedUnknown;
+    needs |= word == "touch" ? NeedTouch : word == "buttons" ? NeedButtons : word == "psram" ? NeedPsram : NeedUnknown;
     at = end + 1;
   } while (take(','));
   return take(']');
 }
 
 // Whether a board with this input meets every need.
-inline bool meets(unsigned needs, bool hasTouch, bool hasButtons) {
-  return !(needs & NeedUnknown) && (!(needs & NeedTouch) || hasTouch) && (!(needs & NeedButtons) || hasButtons);
+inline bool meets(unsigned needs, bool hasTouch, bool hasButtons, bool hasPsram) {
+  return !(needs & NeedUnknown) && (!(needs & NeedTouch) || hasTouch) &&
+         (!(needs & NeedButtons) || hasButtons) && (!(needs & NeedPsram) || hasPsram);
 }
 
 }  // namespace dessen

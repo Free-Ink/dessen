@@ -77,7 +77,9 @@ the stable `tools/` path.
    board: CONFIRM/BACK activate, PREV/NEXT (up/down keys) move a selection,
    swipes (`SWIPE_UP/DOWN/…`) page, taps/long-press carry `DSN_EV_X/Y`. Boards
    with keys *and* touch deliver all of them, distinctly.
-3. Draw to `dsn_screen_width/height()` (the safe area); never hardcode a panel
+3. Build every screen to the **screen standards** below (bar, content, line; a
+   back arrow on every pushed screen; one primary button).
+   Draw to `dsn_screen_width/height()` (the safe area); never hardcode a panel
    size. Use the firmware fonts (`DSN_FONT_*`), not your own glyphs, unless you
    deliberately want bitmap digits (see `dice.c`). Follow the layout rules in
    [`docs/writing-apps.md`](docs/writing-apps.md#laying-out-a-screen) — above all,
@@ -126,6 +128,43 @@ When an app needs something FreeInk/CrossPoint can do but no call exposes:
    exist yet. Flag that to the user before starting — don't invent a blocking
    call inside the render task.
 
+## Screen standards
+
+Every screen you build follows these. The full version, with the reasons and a
+checklist, is [`docs/writing-apps.md`](docs/writing-apps.md#screen-standards);
+[`apps/xpui/nook`](apps/xpui/nook) is the reference implementation.
+
+1. **Bar, content, line.** A bar across the top (one line of body text + 16 px
+   high), the content, and one line under it; all inside one margin. No host
+   title band when the bar says where you are.
+2. **The bar says where you are and what you can do.** Root screen: a bold
+   label and detail on the left. Pushed screen: a **back arrow** (three 3 px
+   strokes, not xpui's thin chevron), its title, and a rule under the bar.
+   Both start 8 px from the top; do not use xpui's taller `NavigationScreen`
+   header. Actions on the right as outlined capsules, at most three, `?` last.
+3. **Navigation is a stack.** A second page is a pushed screen
+   (`xpui::present`), never a flag that swaps a body. Its back arrow pops it
+   (`xpui::finish_screen`) and so does the system Back. Never "tap anywhere to
+   go back".
+4. **One primary button.** Solid ink capsule for the screen's one next step,
+   outlined for everything else. Ask before destroying work, with the host's
+   dialog, and only when there is work to lose.
+5. **Tap targets are at least the bar's height**, 8 px apart.
+6. **Words.** Firmware fonts; Title Case for titles, headings, buttons and
+   dialog choices (`Next Shelf`), sentence case for sentences; a one-line
+   label is at most about 36 characters;
+   the line under the content says the most useful next thing for the current
+   state, not the rules. Rules go on a help screen behind `?`.
+7. **State is shown on the thing itself** (outlined = to do, solid = done,
+   grey = wrong, a badge on what breaks a rule), not described in a sentence.
+8. **Everything is measured** from the screen size and `dsn_line_height`;
+   it must hold in portrait and landscape from 480 px to 1448 px.
+9. **E-paper.** Redraw only on change; the same state draws the same picture;
+   no animation.
+10. **Look at it.** Check each screen in the simulator before calling it done,
+    and leave a `make test` check that opens every screen and comes back.
+    Game graphics follow [`docs/drawing-icons.md`](docs/drawing-icons.md).
+
 ## When NOT to proceed without asking
 
 - Exposing **network, filesystem, or Bluetooth** — these need a firmware-side
@@ -141,6 +180,9 @@ When an app needs something FreeInk/CrossPoint can do but no call exposes:
 
 - [`docs/writing-apps.md`](docs/writing-apps.md) — the human guide, API table,
   constraints.
+- [`docs/drawing-icons.md`](docs/drawing-icons.md) — how to draw e-paper
+  graphics for a mini-game in code: pieces, boards and state marks that are
+  legible, cheap to draw and kind to the panel. Read it before drawing any.
 - `abi/freeink.api` — the whole call list, with the format spec at the top.
 - `freeink/DessenFreeInk.cpp` — the sanitizers (`clip`, `pin`, `guestStr`,
   `drawText`, `drawBitmap`) every call relies on.

@@ -27,6 +27,8 @@ for screen in 480x800 1072x1448; do
   export DESSEN_SCREEN=$screen; echo "== $screen"
   for app in hello dice lightsout minimal home; do run $app nnnccnnppb; done
   run sudoku ncnncnnb
+  # Plants, the help page and back, then New and its question, at either screen's buttons.
+  run nook 't300,300;t300,400;t200,500;t150,350;t448,32;t30,32;t1040,32;t30,32;t392,32;t984,32;b'
   DESSEN_FS_ROOT=$fs run readstats nnnnnnnnnnbb
   f=$(mktemp -d); net=$(mktemp -d); api=$net/sync.test/api/v1/stats/sessions; mkdir -p "$f/.crosspoint" "$api"
   printf '{"username":"reader","password_obf":"","serverUrl":"https://sync.test/"}' > "$f/.crosspoint/koreader.json"

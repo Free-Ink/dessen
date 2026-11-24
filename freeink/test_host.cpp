@@ -298,11 +298,14 @@ static void testManifest() {
   for (const char* bad : {R"({"requires":"touch"})", R"({"requires":[1]})", R"({"requires":["touch")",
                           R"({"requires":["to\uch"]})", R"({"requires":[""]})", R"({"requires":["touch",]})"})
     assert(!parseRequires(bad, needs));
+  assert(parseRequires(R"({"requires":["psram"]})", needs) && needs == dessen::NeedPsram);
   // A board meets what it has; nobody meets what this host does not know.
-  assert(meets(0, false, true) && meets(0, true, false));
-  assert(!meets(dessen::NeedTouch, false, true) && meets(dessen::NeedTouch, true, false));
-  assert(!meets(dessen::NeedButtons, true, false) && meets(dessen::NeedButtons | dessen::NeedTouch, true, true));
-  assert(parseRequires(R"({"requires":["stylus"]})", needs) && !meets(needs, true, true));
+  assert(meets(0, false, true, false) && meets(0, true, false, false));
+  assert(!meets(dessen::NeedTouch, false, true, true) && meets(dessen::NeedTouch, true, false, false));
+  assert(!meets(dessen::NeedButtons, true, false, true) &&
+         meets(dessen::NeedButtons | dessen::NeedTouch, true, true, false));
+  assert(!meets(dessen::NeedPsram, true, true, false) && meets(dessen::NeedPsram, false, false, true));
+  assert(parseRequires(R"({"requires":["stylus"]})", needs) && !meets(needs, true, true, true));
 }
 
 int main(int argc, char** argv) {

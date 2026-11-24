@@ -17,7 +17,7 @@ SD_APPS = hello lightsout dice sudoku home minimal
 RUST ?= yes
 HAVE_RUST := $(shell rustup target list --installed 2>/dev/null | grep -qx riscv32im-unknown-none-elf && echo y)
 HAVE_ZIG := $(shell command -v zig >/dev/null 2>&1 && echo y)
-XPUI_APPS = hello dice lightsout sudoku minimal home readstats
+XPUI_APPS = hello dice lightsout sudoku nook minimal home readstats
 WITH_RUST := $(filter yes,$(RUST))
 SD_LANG_APPS ?= $(if $(WITH_RUST),hello_rs readstats $(XPUI_APPS:%=%_xpui)) $(if $(HAVE_ZIG),hello_zig)
 
@@ -190,6 +190,10 @@ xpui: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
 	printf ncb | build/dessen build/lightsout_xpui.bin | grep -q 'Moves 1'
 	printf cb | build/dessen build/dice_xpui.bin | grep -q 'Last:  d20='
 	printf ncb | build/dessen build/sudoku_xpui.bin | grep -q 'cells left'
+	rustc --edition 2024 --test apps/xpui/nook/src/board.rs -o build/nook_board_test && build/nook_board_test -q
+	printf 't240,400;' | DESSEN_BOARD=touch DESSEN_MANIFEST=apps/nook_xpui.json build/dessen build/nook_xpui.bin | grep -q '[01] of 7 plants'
+	@# ? opens the help page; its back arrow returns to the game.
+	printf 't448,32;t30,32;' | DESSEN_BOARD=touch DESSEN_SCREEN=480x800 build/dessen build/nook_xpui.bin | awk '/How to Play/{h=1} h&&/ plants$$/{ok=1} END{exit !ok}'
 	printf c | build/dessen build/minimal_xpui.bin | grep -q 'launch reader /books/dune.epub'
 	printf nnnc | build/dessen build/minimal_xpui.bin | grep -q 'launch app /plugins/dice/app.bin'
 	printf b | build/dessen build/minimal_xpui.bin | grep -q 'Library'

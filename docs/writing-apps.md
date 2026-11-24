@@ -264,6 +264,141 @@ few rules keep spacing honest. `apps/home.c` follows all of them.
   contrast: don't draw a gray element (e.g. a progress bar) on the gray
   selection fill — swap it to white when the row is selected.
 
+## Screen standards
+
+Every screen of every app follows these, whatever language it is written in.
+They are what makes an app feel like part of the device rather than a demo.
+[`apps/xpui/nook`](../apps/xpui/nook) (Book Nook) is the reference: its
+`view.rs` lays out both of its screens this way.
+
+### Anatomy: bar, content, line
+
+A screen is three bands inside one side margin:
+
+```
+┌──────────────────────────────────────┐
+│ Shelf 1  3 of 7 plants     (New) (?) │  bar
+│                                      │
+│              content                 │
+│                                      │
+│        one line of guidance          │  line (optional)
+└──────────────────────────────────────┘
+```
+
+- **The bar** is one line of body text plus 16 px (`dsn_line_height(DSN_FONT_BODY) + 16`),
+  which is also a comfortable thing to tap. Left: where you are. Right: what
+  you can do.
+- **The content** takes what is left and sizes itself from it.
+- **The line** under the content is one short sentence, or the screen's one
+  primary button when there is a next step.
+- **Margins** come from xpui's layout metrics (`Theme::content_area()`, which
+  the backend fills in; nothing to do with the firmware's visual theme), or a
+  single gutter constant in C. Every band uses the same one.
+- **No host title band** when the bar already says where you are. An app's
+  name belongs in the launcher, not on every screen.
+
+### The bar
+
+| | Root screen | Pushed screen |
+|---|---|---|
+| Left | a bold label, then detail in regular weight (`Shelf 1  3 of 7 plants`) | **a back arrow**, then the screen's title in bold |
+| Right | actions, as outlined capsule buttons | actions, if any |
+
+- **Every screen's bar starts 8 px from the top of the panel**, so a pushed
+  screen's title sits where the root screen's label did. xpui's own header
+  (`NavigationScreen`) is placed by xpui's layout metrics, its `Theme`: a top
+  padding and then a taller band, which leaves a wide empty strip above the
+  title. Do not use it. (The panel's safe area still adds its own inset above
+  everything an app draws; that is the device's, not yours to remove.)
+- **A pushed screen's bar has a rule under it**, across the full width, and a
+  back arrow before the title. xpui's header has no way back in it, so the
+  app's root view draws the bar: see `Bare::pushed` in
+  `apps/xpui/nook/src/view.rs`.
+- **The back arrow is drawn in three 3 px strokes** (`paint::back_arrow`), half
+  the bar's height long. xpui's own chevron icon is one pixel thin and
+  looks faint beside bold type; do not use it for this.
+- At most three actions. Help is `?`, and is the rightmost.
+- An action is a word (`New`) unless a symbol is universal (`?`, the back
+  arrow). Do not invent icons for verbs.
+
+### Navigation is a stack
+
+- **A second page is a second screen**, pushed onto the stack (`xpui::present`),
+  not a flag that swaps the first screen's body. The game underneath keeps its
+  state and comes back untouched.
+- **Every pushed screen has a back arrow at the top left** that pops it
+  (`xpui::finish_screen`). The arrow and the title beside it are one tap
+  target.
+- **The system Back does the same thing** as the arrow, and on the root screen
+  it leaves the app. Do not claim Back for anything else.
+- **Never "tap anywhere to go back"**, and never a screen with no visible way
+  out.
+
+### Buttons and taps
+
+- **Outlined capsule** = an ordinary action. **Solid ink capsule** = the one
+  primary action on the screen (`Next Shelf`). Never two solid buttons.
+- **A tap target is at least the bar's height** in both directions, with 8 px
+  between neighbours. Make the whole row or cell tappable, not just its glyph.
+- **Ask before destroying work**, with the host's own dialog (`Modal::confirm`),
+  the confirming choice first, and only when there is something to lose: New on
+  an untouched board just deals again.
+
+### Words
+
+- **Firmware fonts only** (`DSN_FONT_SMALL/BODY/TITLE`); bold for the label in
+  the bar, a heading, and a button, nowhere else.
+- **A one-line label is at most about 36 characters**, or it is cut off on a
+  narrow panel. Anything longer is wrapped by measuring (`dsn_measure_text`),
+  never by guessing.
+- **The line under the content says the most useful next thing**, and changes
+  with the state: what is wrong (`Plants marked ! are touching.`) before what
+  to do (`Tap a cubby to place a plant.`). It never recites the rules.
+- **Rules and explanations live on a help screen** behind `?`, with a picture
+  of right and wrong before the text.
+- **Title Case for anything that names**: a screen's title, a heading, a
+  button, a dialog's question and its choices (`How to Play`, `Next Shelf`,
+  `Shelf Complete!`). **Sentence case with a full stop for anything that
+  explains**: the line under the content, help text. No exclamation marks
+  except on success.
+
+### Show state where it is
+
+- Put the state **on the thing**: a number's plaque turns solid when its row is
+  right and grey when it is over; a plant that breaks a rule gets a `!` badge.
+  The player should not have to read a sentence to find the problem.
+- Three weights are enough: outlined (to do), solid (done), grey (wrong).
+- Game graphics (pieces, boards, marks) follow
+  [`drawing-icons.md`](drawing-icons.md).
+
+### Layout
+
+- **Everything is measured**: sizes come from the screen size and
+  `dsn_line_height`, never from pixel constants (gaps and minimums excepted).
+- **Portrait and landscape, 480 px to 1448 px**: compute the content's size
+  from whichever dimension is short, and centre what is left over.
+- **Size every text box with the line height** (see above): a short box draws
+  nothing.
+
+### E-paper
+
+- **Redraw only when something changed**, and the same state must draw the
+  same picture (seed any variety from position, not from a clock or random).
+- **No animation, no spinners.** A step that takes a while says so once, in
+  words, before it starts.
+- Large solid-black areas ghost; keep ink for shapes and type.
+
+### Before calling a screen done
+
+- [ ] Bar, content, line; one margin; no host title band.
+- [ ] A pushed screen has a back arrow and a rule under its bar, and Back pops it.
+- [ ] One primary button at most; destructive actions ask.
+- [ ] No label is cut off on a 480 px wide screen.
+- [ ] State is visible on the thing itself.
+- [ ] Looked at in the simulator, at the smallest and largest board.
+- [ ] `make test` drives it: a tap that opens each screen, and the way back.
+- [ ] Heap and stack measured with every screen open (`make xpui-peaks`).
+
 ## Constraints to design around
 
 - **Memory:** one fixed block, 64 KB today (see `sdk/app.ld`). No `malloc` is
@@ -359,6 +494,7 @@ so in its manifest:
 | absent or `[]` | runs on any board (the norm) |
 | `["touch"]` | needs a touch panel |
 | `["buttons"]` | needs physical keys |
+| `["psram"]` | needs PSRAM (large buffers, book covers) |
 
 A launcher reads this **before** the app runs, to decide whether to offer it on
 this board; a host that meets a word it does not know treats the app as not
@@ -491,7 +627,7 @@ tests.
 
 [`apps/xpui/`](../apps/xpui) holds Rust versions of hello, dice, Lights Out,
 Sudoku and the three home launchers (minimal, Recents and Reading Stats),
-written against
+plus Book Nook, a touch-only shelf puzzle that exists only here, written against
 [xpui](https://github.com/XPUI-Framework/xpui-framework) and drawn through its
 dessen backend, `xpui-dessen` (in xpui-backends). The C apps stay; these are
 parallel versions. A screen is a type with `body()` and `update()`; xpui lays
@@ -550,7 +686,7 @@ function pointers, so the linker drops every host method an app never calls
 Taps on the desktop runner need a board with touch: `DESSEN_BOARD=both`
 (or `touch`), since the default board has keys only and drops `t<x>,<y>;`.
 
-`make xpui` builds all seven into `build/<name>_xpui.bin` and checks each on the
+`make xpui` builds all eight into `build/<name>_xpui.bin` and checks each on the
 VM, the launchers with the same checks as their C and Rust versions; `make test`
 and `make sd` include them. Cargo fetches xpui and its dessen backend from
 git the first time, so that build needs the network.
@@ -573,6 +709,7 @@ app must fit in.
 | lightsout | 23.7 KB | 19.9 KB | 1.2 KB (0.6 KB) | 2.5 KB (1.4 KB) |
 | minimal | 25.2 KB | 20.7 KB | 1.8 KB (1.0 KB) | 2.8 KB (1.7 KB) |
 | sudoku | 30.3 KB | 23.1 KB | 1.8 KB (1.0 KB) | 5.5 KB (4.3 KB) |
+| nook (Book Nook) | 44.5 KB | 39.0 KB | 1.8 KB (1.0 KB) | 3.5 KB (2.3 KB) |
 | home (Recents) | 41.3 KB | 27.0 KB | 11.8 KB (8.4 KB) | 2.5 KB (1.4 KB) |
 | readstats | 61.4 KB | 43.5 KB | 9.2 KB (6.5 KB) | 6.0 KB (4.7 KB, importing) |
 
