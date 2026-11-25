@@ -195,7 +195,7 @@ as the `screen-diffs` artifact. Open it from the run's summary page.
 
 The workflow runs on Ubuntu, with Ubuntu's RISC-V GCC
 (`RISCV=riscv64-unknown-elf-`; on a Mac, plain `make test` uses PlatformIO's)
-and with Cargo `--locked`. The goldens are made on macOS. That
+and with `XPUI_LOCKED=--locked` (Cargo `--locked` for the xpui workspaces). The goldens are made on macOS. That
 is fine: FreeInk's renderer is integer-only and the pictures are compared
 pixel by pixel, not byte by byte. To run CI elsewhere, it needs:
 

@@ -183,8 +183,13 @@ rust-sdk: build/selftest_rs.bin build/dessen
 # The xpui apps: one cargo build for the workspace, then each image cut out
 # of its ELF. Every app is checked on the VM with scripted keys.
 XPUI_OUT = build/xpui/riscv32im-unknown-none-elf/release
+# XPUI_LOCKED=--locked (CI) builds exactly the xpui commits in the committed
+# apps/xpui/Cargo.lock, the ones the screen goldens were drawn with, and fails
+# if a Cargo.toml changed without its lockfile. Only the xpui workspaces have a
+# committed lockfile; sdk/rust has no dependencies and none.
+XPUI_LOCKED ?=
 xpui-build: $(GEN)
-	cd apps/xpui && $(RUST_SDK) build --release --target-dir ../../build/xpui
+	cd apps/xpui && $(RUST_SDK) build $(XPUI_LOCKED) --release --target-dir ../../build/xpui
 
 $(XPUI_APPS:%=build/%_xpui.bin): build/%_xpui.bin: xpui-build
 	$(RISCV)objcopy -O binary $(XPUI_OUT)/$*_xpui $@
@@ -224,7 +229,7 @@ xpui-bless: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
 xpui-standards: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
 	@python3 tools/screen_test.py --standards $(XPUI_SCENARIOS)
 xpui-unit:
-	cd tests/xpui/unit && $(RUST_SDK) test --target-dir ../../../build/xpui-unit
+	cd tests/xpui/unit && $(RUST_SDK) test $(XPUI_LOCKED) --target-dir ../../../build/xpui-unit
 
 # The reading-stats checks, for a build of it ($(1)): the cards from a generated
 # session log (tools/readstats_fixture.py), the empty state, an import from
