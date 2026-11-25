@@ -111,7 +111,22 @@ and the reference implementation is `apps/xpui/nook` (Book Nook). In short:
   back to front with a paper edge; one grey for material and shadow; sizes
   measured from the box; tens of draw calls per piece.
 - **Done means looked at:** render each screen in the simulator, and leave a
-  `make test` check that opens every screen and comes back.
+  screen-test walk for every screen (below).
+
+## Testing an xpui app
+
+An xpui app is not done without screen tests and, for its logic, unit tests.
+The recipe is in [`AGENTS.md`](../../../AGENTS.md#recipe-test-an-xpui-app) and the
+reference in [`tests/xpui/README.md`](../../../tests/xpui/README.md). In short:
+
+- `tests/xpui/<app>.scenarios` (copy `nook.scenarios`): a walk per screen and
+  state, each with `expect="..."`, tapping by label (`@Label`) where it can.
+- `make xpui-screens` writes the goldens on the first run and fails; open every
+  PNG, then run again. Commit the goldens with the app.
+- When a screen fails after a change: read what moved, look at
+  `build/screen-diffs/`, fix it or (if meant) `make xpui-bless` and say so.
+  Never bless unseen; never raise `SCREEN_TOLERANCE`.
+- Logic that draws nothing: a crate in `tests/xpui/unit/` (copy `lightsout/`).
 
 ## The API surface
 
@@ -203,4 +218,7 @@ make sd       # stage build/sd/plugins/<app>/ for an SD card
 make rust     # build + run the Rust example (needs the Rust toolchain)
 make zig      # build + run the Zig example (needs Zig)
 make size     # ESP32-C3 flash cost of the VM + binding
+make xpui-screens   # xpui screen tests (pictures + positions, 3 sizes)
+make xpui-bless     # accept deliberate screen changes, after looking
+make xpui-unit      # xpui host unit tests
 ```

@@ -396,7 +396,11 @@ A screen is three bands inside one side margin:
 - [ ] No label is cut off on a 480 px wide screen.
 - [ ] State is visible on the thing itself.
 - [ ] Looked at in the simulator, at the smallest and largest board.
-- [ ] `make test` drives it: a tap that opens each screen, and the way back.
+- [ ] `make test` drives it: a tap that opens each screen, and the way back. For
+      an xpui app that is a walk per screen in `tests/xpui/<app>.scenarios`
+      (with `expect=` text that proves it got there),
+      and the standards it meets on its `standards =` line
+      ([tests/xpui/README.md](../tests/xpui/README.md)).
 - [ ] Heap and stack measured with every screen open (`make xpui-peaks`).
 
 ## Constraints to design around
@@ -427,6 +431,30 @@ in this repo:
    `dice`, `lightsout`, and `sudoku` are checked.
 
 Wire either into the `test:` target so `make test` covers your app.
+
+The xpui apps have their own net, for changing how they draw without changing
+what they show ([tests/xpui/README.md](../tests/xpui/README.md)):
+
+3. **Screen tests:** walks through every screen, at three screen sizes, drawn
+   with FreeInk's own framebuffer target and real fonts. Each screen's picture
+   and the position of every text and button are compared with committed
+   goldens, within 1 px, and checked against the screen standards
+   (`make xpui-screens`; `make xpui-bless` after a deliberate change;
+   `make xpui-standards` for what each app still breaks).
+4. **Unit tests on the host:** the apps' logic, compiled from their own files
+   against a scriptable stand-in for the SDK (`make xpui-unit`).
+
+A new xpui app ships with both. The steps (a walk per screen, `expect=`,
+looking at every golden before committing it) are in
+[tests/xpui/README.md](../tests/xpui/README.md#testing-a-new-xpui-app-checklist);
+what CI needs to run them is under [In CI](../tests/xpui/README.md#in-ci).
+
+The desktop runner takes, besides the keys and taps above, `T<x>,<y>;` (a
+long press) and `^ v < >` (swipes). `DESSEN_TRACE=detail` prints every argument
+of every draw call, `DESSEN_SNAPSHOT=<file.png>` draws with FreeInk's
+framebuffer target and real fonts and writes the last frame there,
+`DESSEN_NOW=<unix seconds>` stops the clock, and `DESSEN_SEED=<n>` makes the
+random numbers the same on every run.
 
 ## Reacting to firmware events
 
