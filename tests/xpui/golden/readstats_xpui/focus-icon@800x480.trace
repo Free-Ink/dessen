@@ -1,0 +1,54 @@
+# readstats_xpui focus-icon @800x480 board=both fs=readstats
+# events: n
+# frames: 2, then waiting
+# line heights 18 34 43
+fill 0,0 800x480 c1
+text 16,11 784x34 f1 left c4 m1 bold ink 16,11 200x34 | 4:00 PM  2/4  72%
+line 0,48 - 799,48 w1 c4
+stroke 44,72 712x154 w1 c4
+text 56,78 744x18 f0 left c4 m1 ink 56,78 126x18 | Last 7 days (minutes)
+text 97,196 703x18 f0 left c4 m1 ink 97,196 15x18 | Tu
+text 193,196 607x18 f0 left c4 m1 ink 193,196 19x18 | We
+text 293,196 507x18 f0 left c4 m1 ink 293,196 15x18 | Th
+text 393,196 407x18 f0 left c4 m1 ink 393,196 12x18 | Fr
+text 490,196 310x18 f0 left c4 m1 ink 490,196 14x18 | Sa
+fill 565,156 58x36 c4
+text 588,138 212x18 f0 left c4 m1 ink 588,138 14x18 | 15
+text 587,196 213x18 f0 left c4 m1 ink 587,196 15x18 | Su
+fill 663,120 58x72 c4
+text 686,102 114x18 f0 left c4 m1 ink 686,102 14x18 | 30
+text 683,196 117x18 f0 left c4 m1 ink 683,196 20x18 | Mo
+fill 56,192 688x1 c3
+fill 61,360 84x84 c4 r20/15
+clip 79,378 48x48
+bitmap 79,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+stroke 55,354 96x96 w1 c4
+stroke 56,355 94x94 w1 c4
+stroke 57,356 92x92 w1 c4
+text 82,450 718x18 f0 left c4 m1 bold ink 82,450 42x18 | Library
+fill 179,360 84x84 c4 r20/15
+clip 197,378 48x48
+bitmap 197,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 208,450 592x18 f0 left c4 m1 ink 208,450 26x18 | Files
+fill 297,360 84x84 c4 r20/15
+clip 315,378 48x48
+bitmap 315,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 322,450 478x18 f0 left c4 m1 ink 322,450 34x18 | OPDS
+fill 415,360 84x84 c4 r20/15
+clip 433,378 48x48
+bitmap 433,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 435,450 365x18 f0 left c4 m1 ink 435,450 44x18 | Plugins
+fill 533,360 84x84 c4 r20/15
+clip 551,378 48x48
+bitmap 551,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 550,450 250x18 f0 left c4 m1 ink 550,450 49x18 | Transfer
+fill 651,360 84x84 c4 r20/15
+clip 669,378 48x48
+bitmap 669,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 668,450 132x18 f0 left c4 m1 ink 668,450 49x18 | Settings

@@ -1,0 +1,12 @@
+# Minimal: a launcher list over the recents fixture; Back does nothing.
+app = minimal_xpui
+
+walk root :
+walk next : n
+walk to-settings : n n n n
+walk wraps : p
+walk continue-reading : c
+walk library : n c
+walk dice : n n n c
+walk back-stays : b
+walk tap-files board=touch : @Files
