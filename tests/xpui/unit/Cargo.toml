@@ -1,0 +1,21 @@
+# Host unit tests for the pure logic of the xpui apps (apps/xpui): parsing,
+# counting, puzzles and menus, the parts a migration of the screens must not
+# change. Each crate here compiles an app's own source files with #[path],
+# against `dessen-host`, a stand-in for the dessen SDK whose calls a test
+# scripts (files, clock, random numbers, recents). Drawing is covered by the
+# screen tests instead (tools/screen_test.py).
+#
+# Run: make xpui-unit, or cargo test in this directory.
+[workspace]
+resolver = "3"
+members = ["dessen-host", "kit-host", "readstats", "sudoku", "lightsout", "dice", "minimal", "home"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+dessen = { package = "dessen-host", path = "dessen-host" }
+kit = { package = "kit-host", path = "kit-host" }

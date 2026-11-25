@@ -1,0 +1,13 @@
+[package]
+name = "dessen-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "dessen"
+
+[dependencies]
+# The real SDK, for its constants: on the host it has no calls.
+sdk = { package = "dessen", path = "../../../../sdk/rust", default-features = false }

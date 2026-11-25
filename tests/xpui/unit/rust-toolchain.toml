@@ -1,0 +1,4 @@
+# The apps' own pin (apps/xpui/rust-toolchain.toml), so their files compile
+# here with the same compiler; the host target needs nothing extra.
+[toolchain]
+channel = "1.97.1"
