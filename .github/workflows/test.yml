@@ -1,0 +1,85 @@
+# `make test` on every pull request and every push to master: the VM, the
+# binding, the C and Rust apps, and the xpui apps' screen and unit tests
+# (tests/xpui/README.md). When a screen test fails, the diff images are
+# uploaded as the `screen-diffs` artifact.
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: dessen
+
+      # The SDK commit the binding was last reviewed against (make sync-accept).
+      # It also draws the screen-test pictures, so the goldens are made with it.
+      - name: Read the FreeInk SDK pin
+        id: sdk
+        run: echo "sha=$(tr -d '[:space:]' < dessen/abi/.freeink-sync)" >> "$GITHUB_OUTPUT"
+
+      # A sibling checkout, where the Makefile looks by default (../freeink-sdk).
+      # Its submodule (the icon sources) is not needed: the icons are generated
+      # into its headers.
+      - uses: actions/checkout@v4
+        with:
+          repository: Free-Ink/freeink-sdk
+          ref: ${{ steps.sdk.outputs.sha }}
+          path: freeink-sdk
+
+      # The desktop runner needs OpenSSL (desktop crypto) and zlib (PNGs). Any
+      # RV32 GCC builds the C apps; Ubuntu's riscv64 one targets rv32im too.
+      - name: Install the C toolchains
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            gcc-riscv64-unknown-elf libssl-dev zlib1g-dev
+
+      # The pin of apps/xpui/rust-toolchain.toml, as the default too, because
+      # the Makefile checks the default toolchain for the riscv32im target.
+      - name: Install Rust
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --target riscv32im-unknown-none-elf
+          rustup default 1.97.1
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            dessen/build/rust
+            dessen/build/xpui
+            dessen/build/xpui-unit
+          key: cargo-${{ runner.os }}-${{ hashFiles('dessen/**/Cargo.lock', 'dessen/**/rust-toolchain.toml') }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      # XPUI_LOCKED: build the xpui commits in the committed Cargo.lock, the
+      # ones the goldens were drawn with, and fail if a Cargo.toml changed
+      # without its lockfile. RISCV: Ubuntu's RV32 GCC; a Mac uses PlatformIO's (the
+      # Makefile's default), so run plain `make test` there.
+      - name: make test
+        working-directory: dessen
+        run: make RISCV=riscv64-unknown-elf- XPUI_LOCKED=--locked test
+
+      - name: Upload the screen diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-diffs
+          path: dessen/build/screen-diffs/
+          if-no-files-found: ignore
+          retention-days: 14

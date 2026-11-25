@@ -1,0 +1,37 @@
+# readstats_xpui tap-empty-turns @1448x1072 board=touch fs=readstats
+# events: t50%,99%
+# frames: 2, then waiting
+# line heights 18 34 43
+fill 0,0 1448x1072 c1
+text 16,11 1432x34 f1 left c4 m1 bold ink 16,11 200x34 | 4:00 PM  2/2  72%
+line 0,48 - 1447,48 w1 c4
+fill 115,952 84x84 c4 r20/15
+clip 133,970 48x48
+bitmap 133,970 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 136,1042 1312x18 f0 left c4 m1 ink 136,1042 42x18 | Library
+fill 341,952 84x84 c4 r20/15
+clip 359,970 48x48
+bitmap 359,970 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 370,1042 1078x18 f0 left c4 m1 ink 370,1042 26x18 | Files
+fill 567,952 84x84 c4 r20/15
+clip 585,970 48x48
+bitmap 585,970 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 592,1042 856x18 f0 left c4 m1 ink 592,1042 34x18 | OPDS
+fill 793,952 84x84 c4 r20/15
+clip 811,970 48x48
+bitmap 811,970 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 813,1042 635x18 f0 left c4 m1 ink 813,1042 44x18 | Plugins
+fill 1019,952 84x84 c4 r20/15
+clip 1037,970 48x48
+bitmap 1037,970 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 1036,1042 412x18 f0 left c4 m1 ink 1036,1042 49x18 | Transfer
+fill 1245,952 84x84 c4 r20/15
+clip 1263,970 48x48
+bitmap 1263,970 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 1262,1042 186x18 f0 left c4 m1 ink 1262,1042 49x18 | Settings

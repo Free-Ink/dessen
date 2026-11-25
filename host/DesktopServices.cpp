@@ -10,6 +10,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <cerrno>
 #include <climits>
 #include <cstdio>
@@ -182,10 +183,17 @@ DesktopServices::DesktopServices(std::string fsRoot, std::string appDir, std::st
     : fsRoot_(std::move(fsRoot)), appDir_(std::move(appDir)), netRoot_(std::move(netRoot)) {}
 
 // ---- core ----
-uint32_t DesktopServices::timeNow() { return static_cast<uint32_t>(::time(nullptr)); }
+// DESSEN_NOW=<unix seconds> stops the clock there, so a trace golden draws
+// the same status line and "today" on every run (tools/screen_test.py).
+static time_t desktopNow() {
+  const char* fixed = getenv("DESSEN_NOW");
+  return fixed ? static_cast<time_t>(strtoll(fixed, nullptr, 10)) : ::time(nullptr);
+}
+
+uint32_t DesktopServices::timeNow() { return static_cast<uint32_t>(desktopNow()); }
 
 int DesktopServices::clock(uint8_t* out) {
-  const time_t now = ::time(nullptr);
+  const time_t now = desktopNow();
   struct tm t;
   localtime_r(&now, &t);
   const unsigned year = static_cast<unsigned>(t.tm_year + 1900);

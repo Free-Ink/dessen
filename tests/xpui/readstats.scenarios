@@ -1,0 +1,23 @@
+# Reading stats (home): cards from a generated session log, its pages, the
+# empty state, and the CrossPoint Sync import.
+app = readstats_xpui
+board = both
+
+walk page1 fs=readstats expect="Continue reading" :
+walk focus-icon fs=readstats : n
+walk page2 fs=readstats expect=" 2/" : ^
+walk page2-back fs=readstats : ^ v
+walk page2-focus fs=readstats : n n
+walk page2-focus-more fs=readstats : n n n n n
+walk walk-all fs=readstats : n n n n n n n n n n
+walk back-to-page1 fs=readstats : ^ b
+walk leave fs=readstats : b
+walk tap-empty-turns fs=readstats board=touch expect="2/" : t50%,99%
+walk open-book fs=readstats : c
+walk open-settings fs=readstats board=touch : ^ @Settings
+walk open-home fs=readstats : n n c
+walk empty fs=empty expect="No reading sessions yet" :
+walk no-storage expect="need newer" :
+walk import-offer fs=sync expect="Import from CrossPoint Sync" :
+walk import fs=sync expect="Continue reading" : c type:secret
+walk import-cancel fs=sync : c

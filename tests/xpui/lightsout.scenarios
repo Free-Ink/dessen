@@ -1,0 +1,12 @@
+# Lights Out: a cursor for the keys, taps for touch.
+app = lightsout_xpui
+
+walk root expect="Moves 0" :
+walk root-touch board=touch :
+walk move : n
+walk move-back : n p
+walk press expect="Moves 1" : c
+walk move-press expect="Moves 1" : n n c
+walk press-twice-undoes expect="Moves 2" : c c
+walk tap board=touch expect="Moves 1" : t50%,40%
+walk back : b

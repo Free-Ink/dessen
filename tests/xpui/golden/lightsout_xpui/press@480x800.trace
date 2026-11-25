@@ -1,0 +1,50 @@
+# lightsout_xpui press @480x800 board=both
+# events: c
+# frames: 2, then waiting
+# line heights 18 34 43
+fill 0,0 480x800 c1
+text 16,11 464x34 f1 left c4 m1 bold ink 16,11 119x34 | Lights Out
+line 0,48 - 479,48 w1 c4
+text 16,60 464x34 f1 left c4 m1 ink 16,60 192x34 | Level 1   Moves 1
+fill 21,110 81x81 c4
+fill 51,140 21x21 c1
+fill 110,110 81x81 c4
+fill 113,113 75x75 c1
+fill 199,110 81x81 c4
+fill 288,110 81x81 c4
+fill 291,113 75x75 c1
+fill 377,110 81x81 c4
+fill 380,113 75x75 c1
+fill 21,199 81x81 c4
+fill 110,199 81x81 c4
+fill 113,202 75x75 c1
+fill 199,199 81x81 c4
+fill 288,199 81x81 c4
+fill 377,199 81x81 c4
+fill 380,202 75x75 c1
+fill 21,288 81x81 c4
+fill 110,288 81x81 c4
+fill 199,288 81x81 c4
+fill 202,291 75x75 c1
+fill 288,288 81x81 c4
+fill 377,288 81x81 c4
+fill 380,291 75x75 c1
+fill 21,377 81x81 c4
+fill 110,377 81x81 c4
+fill 113,380 75x75 c1
+fill 199,377 81x81 c4
+fill 288,377 81x81 c4
+fill 291,380 75x75 c1
+fill 377,377 81x81 c4
+fill 380,380 75x75 c1
+fill 21,466 81x81 c4
+fill 24,469 75x75 c1
+fill 110,466 81x81 c4
+fill 113,469 75x75 c1
+fill 199,466 81x81 c4
+fill 202,469 75x75 c1
+fill 288,466 81x81 c4
+fill 291,469 75x75 c1
+fill 377,466 81x81 c4
+fill 380,469 75x75 c1
+text 16,563 464x34 f1 left c4 m1 ink 16,563 281x34 | Turn every square white.

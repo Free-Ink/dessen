@@ -1,0 +1,23 @@
+# Sudoku: the puzzle is generated on the device (seeded, so the same one every
+# run). The cursor starts on the centre (cell 40, a given); cell 41, one step
+# on, is blank in this puzzle.
+app = sudoku_xpui
+
+walk root expect="51 cells left" :
+walk root-touch board=touch expect="51 cells left" :
+walk move : n
+walk move-row : n n n n n n n n n
+walk wraps : p
+walk step-given-does-nothing expect="51 cells left" : c
+walk step-blank expect="50 cells left" : n c
+walk step-blank-twice expect="50 cells left" : n c c
+walk step-to-blank expect="51 cells left" : n c c c c c c c c c c
+walk back : b
+# Taps: cell 41, then the 5 on the pad, at each size's layout. The board and
+# pad are drawn, not text, so these are pixels; expect= catches a miss.
+walk tap-cell board=touch sizes=480x800 : t288,280
+walk tap-cell board=touch sizes=800x480 : t430,199
+walk tap-cell board=touch sizes=1448x1072 : t814,465
+walk tap-cell-5 board=touch sizes=480x800 expect="50 cells left" : t288,280 t218,535
+walk tap-cell-5 board=touch sizes=800x480 expect="50 cells left" : t430,199 t362,389
+walk tap-cell-5 board=touch sizes=1448x1072 expect="50 cells left" : t814,465 t653,952

@@ -23,10 +23,11 @@ license = "MIT"
 publish = false
 
 [workspace.dependencies]
+kit = { path = "kit" }
+dessen = { path = "../../sdk/rust", features = ["heap"] }
+
 xpui = { git = "https://github.com/XPUI-Framework/xpui-framework", branch = "main" }
 xpui-dessen = { git = "https://github.com/XPUI-Framework/xpui-backends", branch = "main" }
-dessen = { path = "../../sdk/rust", features = ["heap"] }
-kit = { path = "kit" }
 
 [profile.release]
 opt-level = "z"

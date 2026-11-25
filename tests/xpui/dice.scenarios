@@ -1,0 +1,17 @@
+# Dice: pick a die with the keys or by tapping it; Confirm or a tap rolls.
+app = dice_xpui
+
+walk root expect="No rolls yet" :
+walk roll expect="Rolled d20" : c
+walk roll-again expect="d20=3  d20=1" : c c
+walk next-die : n
+walk next-die-roll expect="Rolled d100" : n c
+walk prev-wraps : p
+walk last-die-roll expect="Rolled d12" : p c
+walk tap-d6 board=touch expect="Rolled d6" : @d6
+walk tap-d100 board=touch expect="Rolled d100" : @d100
+walk back : b
+# A tap on the result rolls the same die again; the result is digits, not text.
+walk tap-result-rerolls board=touch sizes=480x800 expect="d20=3  d20=1" : @d20 t270,416
+walk tap-result-rerolls board=touch sizes=800x480 expect="d20=3  d20=1" : @d20 t442,330
+walk tap-result-rerolls board=touch sizes=1448x1072 expect="d20=3  d20=1" : @d20 t818,556

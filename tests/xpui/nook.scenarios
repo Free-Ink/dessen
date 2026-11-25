@@ -1,0 +1,23 @@
+# Nook, the reference for the screen standards: every screen of it.
+app = nook_xpui
+manifest = apps/nook_xpui.json
+board = touch
+standards = bar taps actions
+
+walk root expect="0 of 7 plants" :
+walk help pushed expect="How to Play" : @?
+walk help-arrow-back expect="0 of 7 plants" : @? @back
+# A plant in the cubby beside the first book (row 2, column 2), at each size's layout.
+walk plant sizes=480x800 expect="1 of 7 plants" : t173,291
+walk plant sizes=800x480 expect="1 of 7 plants" : t343,201
+walk plant sizes=1448x1072 expect="1 of 7 plants" : t535,355
+# New with a plant down asks first.
+walk ask-new sizes=480x800 expect="Start a New Shelf?" : t173,291 @New
+walk ask-new sizes=800x480 expect="Start a New Shelf?" : t343,201 @New
+walk ask-new sizes=1448x1072 expect="Start a New Shelf?" : t535,355 @New
+walk keep-playing sizes=480x800 expect="1 of 7 plants" : t173,291 @New @"Keep Playing"
+walk keep-playing sizes=800x480 expect="1 of 7 plants" : t343,201 @New @"Keep Playing"
+walk keep-playing sizes=1448x1072 expect="1 of 7 plants" : t535,355 @New @"Keep Playing"
+walk new-shelf sizes=480x800 expect="0 of 7 plants" : t173,291 @New @"New Shelf"
+walk new-shelf sizes=800x480 expect="0 of 7 plants" : t343,201 @New @"New Shelf"
+walk new-shelf sizes=1448x1072 expect="0 of 7 plants" : t535,355 @New @"New Shelf"

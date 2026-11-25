@@ -1,0 +1,41 @@
+# home_xpui back-files @480x800 board=both
+# events: b
+# frames: 1, then [launch browser ]
+# line heights 18 34 43
+fill 0,0 480x800 c1
+text 16,11 464x34 f1 left c4 m1 bold ink 16,11 139x34 | Recents  1-3
+line 0,48 - 479,48 w1 c4
+fill 32,66 416x108 c2
+text 44,77 436x34 f1 left c4 m1 bold ink 44,77 62x34 | Dune
+text 44,117 436x18 f0 left c4 m1 ink 44,117 84x18 | Frank Herbert
+stroke 44,153 322x10 w1 c4
+fill 45,154 118x8 c4
+text 378,149 102x18 f0 left c4 m1 ink 378,149 25x18 | 37%
+text 44,197 436x34 f1 left c4 m1 bold ink 44,197 105x34 | Hyperion
+text 44,237 436x18 f0 left c4 m1 ink 44,237 83x18 | Dan Simmons
+stroke 44,273 322x10 w1 c4
+fill 45,274 16x8 c4
+text 378,269 102x18 f0 left c4 m1 ink 378,269 18x18 | 5%
+text 44,317 436x34 f1 left c4 m1 bold ink 44,317 158x34 | Neuromancer
+text 44,357 436x18 f0 left c4 m1 ink 44,357 88x18 | William Gibson
+fill 16,708 448x1 c2
+clip 45,721 30x30
+bitmap 45,721 30x30 src 30x30 m0 c4
+clip 0,0 32767x32767
+text 47,756 433x18 f0 left c4 m1 ink 47,756 26x18 | Files
+clip 135,721 30x30
+bitmap 135,721 30x30 src 30x30 m0 c4
+clip 0,0 32767x32767
+text 133,756 347x18 f0 left c4 m1 ink 133,756 34x18 | OPDS
+clip 224,721 30x30
+bitmap 224,721 30x30 src 30x30 m0 c4
+clip 0,0 32767x32767
+text 217,756 263x18 f0 left c4 m1 ink 217,756 44x18 | Plugins
+clip 314,721 30x30
+bitmap 314,721 30x30 src 30x30 m0 c4
+clip 0,0 32767x32767
+text 304,756 176x18 f0 left c4 m1 ink 304,756 49x18 | Transfer
+clip 404,721 30x30
+bitmap 404,721 30x30 src 30x30 m0 c4
+clip 0,0 32767x32767
+text 394,756 86x18 f0 left c4 m1 ink 394,756 49x18 | Settings

@@ -1,0 +1,14 @@
+# Recents (home): books from the recents fixture, pages, and the bar of destinations.
+app = home_xpui
+
+walk root :
+walk next : n
+walk next-next : n n
+walk page-up : ^
+walk page-up-down : ^ v
+walk page-left : <
+walk open-first : c
+walk open-second : n c
+walk back-files : b
+walk tap-book board=touch : @Hyperion
+walk tap-plugins board=touch : @Plugins

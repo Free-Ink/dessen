@@ -8,7 +8,7 @@ Total 5h 45m over 32 sessions.
 """
 import json, os, sys, time
 
-now = int(time.time())
+now = int(os.environ.get("DESSEN_NOW") or time.time())  # the screen tests fix the clock
 tz = time.localtime().tm_gmtoff // 60
 DUNE, HAND = "d" * 32, "a" * 32
 

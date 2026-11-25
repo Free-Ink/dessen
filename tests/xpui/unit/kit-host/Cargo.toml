@@ -1,0 +1,12 @@
+[package]
+name = "kit-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+name = "kit"
+
+[dependencies]
+dessen.workspace = true

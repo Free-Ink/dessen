@@ -50,7 +50,10 @@ the **crosspoint-reader** repo on branch `feat/dessen-apps`, behind
    interpreter and binding are tiny on purpose. Add a call only when a real app
    needs it; don't speculatively mirror the whole SDK.
 5. **Leave a test.** Non-trivial logic gets one runnable check (a self-checking
-   app or a `test_host.cpp` assertion) wired into `make test`.
+   app or a `test_host.cpp` assertion) wired into `make test`. An **xpui app**
+   gets screen tests for every screen and unit tests for its logic; see
+   [Recipe: test an xpui app](#recipe-test-an-xpui-app). Never bless a golden
+   you have not opened, and never raise the tolerance to make a test pass.
 
 ## Build & test
 
@@ -61,7 +64,17 @@ make test RUST=no   # C only, when Rust (riscv32im target) or xpui-backends is a
 make size     # ESP32-C3 flash cost of the VM and the binding
 zig build     # the Zig apps with Zig alone (build.zig, also read by zls); zig build run -Dapp=hello
 make FREEINK_SDK=/path/to/freeink-sdk test   # if the SDK isn't a sibling dir
+make xpui-screens   # the xpui screen tests only: pictures + element positions, 3 sizes
+make xpui-screens APP=nook   # one app's walks
+make xpui-bless APP=nook     # rewrite its goldens after a deliberate change (look first!)
+make xpui-standards # what each xpui app still breaks of the screen standards
+make xpui-unit      # the xpui apps' host unit tests only
 ```
+
+`make test` is what CI runs (`.github/workflows/test.yml`, on every pull
+request); it fails on any screen, element, standard or unit test failure, and
+uploads the screen diffs as an artifact. More in
+[`tests/xpui/README.md`](tests/xpui/README.md#in-ci).
 
 The RISC-V compiler is expected at `~/.platformio/tools/toolchain-riscv32-esp/`.
 Note PlatformIO sometimes removes the copy under `packages/`; the Makefile uses
@@ -96,6 +109,52 @@ the stable `tools/` path.
    `DESSEN_BOARD=touch|buttons|both` picks the board, `DESSEN_MANIFEST` the
    manifest it checks; exit 103 = the board cannot drive the app).
 7. Add a check and run `make test`.
+
+## Recipe: test an xpui app
+
+Every xpui app (new or changed) is covered by **screen tests**: walks that
+drive it to each screen, drawn with FreeInk's real renderer and fonts at
+480×800, 800×480 and 1448×1072, compared with committed PNG goldens and
+element positions within 1 px. Pure logic gets **unit tests** on the host.
+Full reference: [`tests/xpui/README.md`](tests/xpui/README.md).
+
+For a **new** app:
+
+1. Add it to `XPUI_APPS` in the `Makefile` and to `apps/xpui/Cargo.toml`.
+2. Write `tests/xpui/<app>.scenarios`, copying `tests/xpui/nook.scenarios`.
+   One walk per reachable screen and state: the root screen (per board if it
+   differs), every pushed screen (`pushed`) and both ways back (`@back`, `b`),
+   every dialog and each answer, empty/error/old-firmware states, a step of
+   the main loop by keys and by touch, and leaving the app.
+3. Give every walk `expect="..."`: text only its final screen shows. Tap by
+   label (`@New`, `@"Keep Playing"`); a pixel tap (`t173,291`) only where
+   nothing is labelled, one walk per size (`sizes=480x800`).
+4. Run `make xpui-standards` and list what it passes on `standards =` (a new
+   app should pass `bar taps actions`).
+5. Run `make xpui-screens`. The first run writes the goldens and **fails on
+   purpose**. Open every new PNG in `tests/xpui/golden/<app>/` and confirm it
+   shows the screen the walk names; run again, it must pass.
+6. If the app has files that draw nothing, add a crate in `tests/xpui/unit/`
+   (copy `unit/lightsout/`; it `#[path]`-includes the app's files) and add it
+   to the workspace members.
+7. `make test`. Commit the scenarios, the goldens and the unit tests with the
+   app.
+
+For a **change** to how an app draws (a refactor, a new xpui component, a
+framework migration), work one app at a time. The committed goldens are the
+reference, so there is nothing to record first.
+
+1. Change one app, then run `make xpui-screens APP=<app>`.
+2. Each failure names what moved (`text 'How to Play' moved +0,+2`) and
+   writes a diff image to `build/screen-diffs/<app>/` (red = moved beyond
+   tolerance). Look at it.
+3. Unintended: fix the code. Intended: tell the user what moved and why, then
+   `make xpui-bless APP=<app>` (never bless all apps for a one-app change)
+   and open the rewritten PNGs.
+4. A walk that now fails "did not reach its screen" means its tap missed the
+   new layout: re-aim the tap, don't delete the walk.
+5. `make test`, then commit the app with its blessed goldens before the next
+   app.
 
 ## Recipe: add a capability (one new call)
 
@@ -162,7 +221,8 @@ checklist, is [`docs/writing-apps.md`](docs/writing-apps.md#screen-standards);
 9. **E-paper.** Redraw only on change; the same state draws the same picture;
    no animation.
 10. **Look at it.** Check each screen in the simulator before calling it done,
-    and leave a `make test` check that opens every screen and comes back.
+    and leave a screen-test walk for every screen
+    ([Recipe: test an xpui app](#recipe-test-an-xpui-app)).
     Game graphics follow [`docs/drawing-icons.md`](docs/drawing-icons.md).
 
 ## When NOT to proceed without asking

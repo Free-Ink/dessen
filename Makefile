@@ -37,6 +37,9 @@ endif
 
 GEN = sdk/dessen_sysnums.h sdk/dessen_calls.h freeink/dessen_dispatch.inc
 HOSTFLAGS = -std=c++17 -O2 -Wall -Wextra -Ivm -Isdk -Ifreeink -Ihost $(OPENSSL_CFLAGS) -I$(FREEINK_SDK)/libs/ui/FreeInkUI/include
+# The desktop runner's snapshots (host/Snapshot.h) draw with FreeInk's
+# framebuffer target and its gallery fonts, and write PNGs with zlib.
+SNAPFLAGS = -I$(FREEINK_SDK)/libs/ui/FreeInkUI/tools
 BINDING = sdk/dessen_abi.h freeink/DessenFreeInk.cpp freeink/DessenFreeInk.h freeink/DessenServices.h host/DesktopServices.cpp host/DesktopServices.h host/TraceTarget.h host/Manifest.h vm/dessen_vm.h $(GEN)
 
 all: build/dessen build/test_freeink $(APPS:%=build/%.bin)
@@ -54,8 +57,9 @@ build/dessen_vm.o: vm/dessen_vm.c vm/dessen_vm.h sdk/dessen_abi.h $(GEN)
 	@mkdir -p build
 	cc -O2 -Wall -Wextra -Ivm -Isdk -c vm/dessen_vm.c -o $@
 
-build/dessen: host/main.cpp build/dessen_vm.o $(BINDING)
-	c++ $(HOSTFLAGS) host/main.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
+build/dessen: host/main.cpp host/Snapshot.h build/dessen_vm.o $(BINDING)
+	c++ $(HOSTFLAGS) $(SNAPFLAGS) host/main.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp \
+	    $(FREEINK_SDK)/libs/ui/FreeInkUI/src/FreeInkUI.cpp build/dessen_vm.o $(OPENSSL_LIBS) -lz -o $@
 
 build/test_freeink: freeink/test_host.cpp build/dessen_vm.o $(BINDING)
 	c++ $(HOSTFLAGS) freeink/test_host.cpp freeink/DessenFreeInk.cpp host/DesktopServices.cpp build/dessen_vm.o $(OPENSSL_LIBS) -o $@
@@ -179,8 +183,13 @@ rust-sdk: build/selftest_rs.bin build/dessen
 # The xpui apps: one cargo build for the workspace, then each image cut out
 # of its ELF. Every app is checked on the VM with scripted keys.
 XPUI_OUT = build/xpui/riscv32im-unknown-none-elf/release
+# XPUI_LOCKED=--locked (CI) builds exactly the xpui commits in the committed
+# apps/xpui/Cargo.lock, the ones the screen goldens were drawn with, and fails
+# if a Cargo.toml changed without its lockfile. Only the xpui workspaces have a
+# committed lockfile; sdk/rust has no dependencies and none.
+XPUI_LOCKED ?=
 xpui-build: $(GEN)
-	cd apps/xpui && $(RUST_SDK) build --release --target-dir ../../build/xpui
+	cd apps/xpui && $(RUST_SDK) build $(XPUI_LOCKED) --release --target-dir ../../build/xpui
 
 $(XPUI_APPS:%=build/%_xpui.bin): build/%_xpui.bin: xpui-build
 	$(RISCV)objcopy -O binary $(XPUI_OUT)/$*_xpui $@
@@ -202,7 +211,27 @@ xpui: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
 	printf nnc | build/dessen build/home_xpui.bin | grep -q 'launch reader /books/neuromancer.epub'
 	build/dessen build/home_xpui.bin </dev/null | grep -q '37%'
 	$(call readstats_check,build/readstats_xpui.bin)
+	@$(MAKE) --no-print-directory xpui-screens xpui-unit
 	@echo "xpui apps: PASS"
+
+# The safety net for changing the xpui apps' screens (tests/xpui/README.md):
+# every walk in tests/xpui/*.scenarios, at three screen sizes, drawn with real
+# fonts and compared with its committed picture and element positions (1 px of
+# tolerance) and checked against the screen standards the app declares; and
+# the apps' pure logic, unit-tested on the host. After a deliberate change,
+# look at build/screen-diffs/, then `make xpui-bless`. `make xpui-standards`
+# lists what each app still breaks of the screen standards.
+# APP=nook runs (or blesses) one app's walks only.
+XPUI_SCENARIOS = $(wildcard tests/xpui/*.scenarios)
+XPUI_ONLY = $(if $(APP),--only $(APP)_xpui)
+xpui-screens: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
+	@python3 tools/screen_test.py $(XPUI_ONLY) $(XPUI_SCENARIOS)
+xpui-bless: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
+	@python3 tools/screen_test.py --update $(XPUI_ONLY) $(XPUI_SCENARIOS)
+xpui-standards: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
+	@python3 tools/screen_test.py --standards $(XPUI_SCENARIOS)
+xpui-unit:
+	cd tests/xpui/unit && $(RUST_SDK) test $(XPUI_LOCKED) --target-dir ../../../build/xpui-unit
 
 # The reading-stats checks, for a build of it ($(1)): the cards from a generated
 # session log (tools/readstats_fixture.py), the empty state, an import from
@@ -257,4 +286,4 @@ zig: build/hello_zig.bin build/dessen
 clean:
 	rm -rf build
 
-.PHONY: all test sd sync sync-accept size rust rust-check rust-sdk xpui xpui-build xpui-sizes xpui-peaks zig clean
+.PHONY: all test sd sync sync-accept size rust rust-check rust-sdk xpui xpui-build xpui-sizes xpui-peaks xpui-screens xpui-bless xpui-standards xpui-unit zig clean

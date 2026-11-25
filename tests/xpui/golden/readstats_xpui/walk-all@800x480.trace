@@ -1,0 +1,49 @@
+# readstats_xpui walk-all @800x480 board=both fs=readstats
+# events: n n n n n n n n n n
+# frames: 11, then waiting
+# line heights 18 34 43
+fill 0,0 800x480 c1
+text 16,11 784x34 f1 left c4 m1 bold ink 16,11 200x34 | 4:00 PM  4/4  72%
+line 0,48 - 799,48 w1 c4
+stroke 44,72 169x85 w1 c4
+text 56,78 744x18 f0 left c4 m1 ink 56,78 51x18 | Sessions
+text 56,102 744x43 f2 left c4 m1 bold ink 56,102 46x43 | 32
+stroke 225,72 169x85 w1 c4
+text 237,78 563x18 f0 left c4 m1 ink 237,78 96x18 | Average session
+text 237,102 563x43 f2 left c4 m1 bold ink 237,102 81x43 | 10m
+stroke 406,72 169x85 w1 c4
+text 418,78 382x18 f0 left c4 m1 ink 418,78 66x18 | Best streak
+text 418,102 382x43 f2 left c4 m1 bold ink 418,102 142x43 | 30 days
+stroke 587,72 169x85 w1 c4
+text 599,78 201x18 f0 left c4 m1 ink 599,78 109x18 | Books' worth read
+text 599,102 201x43 f2 left c4 m1 bold ink 599,102 57x43 | 1.6
+fill 61,360 84x84 c4 r20/15
+clip 79,378 48x48
+bitmap 79,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 82,450 718x18 f0 left c4 m1 ink 82,450 42x18 | Library
+fill 179,360 84x84 c4 r20/15
+clip 197,378 48x48
+bitmap 197,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 208,450 592x18 f0 left c4 m1 ink 208,450 26x18 | Files
+fill 297,360 84x84 c4 r20/15
+clip 315,378 48x48
+bitmap 315,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 322,450 478x18 f0 left c4 m1 ink 322,450 34x18 | OPDS
+fill 415,360 84x84 c4 r20/15
+clip 433,378 48x48
+bitmap 433,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 435,450 365x18 f0 left c4 m1 ink 435,450 44x18 | Plugins
+fill 533,360 84x84 c4 r20/15
+clip 551,378 48x48
+bitmap 551,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 550,450 250x18 f0 left c4 m1 ink 550,450 49x18 | Transfer
+fill 651,360 84x84 c4 r20/15
+clip 669,378 48x48
+bitmap 669,378 48x48 src 48x48 m0 c1
+clip 0,0 32767x32767
+text 668,450 132x18 f0 left c4 m1 ink 668,450 49x18 | Settings

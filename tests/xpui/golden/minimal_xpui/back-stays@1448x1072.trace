@@ -1,0 +1,14 @@
+# minimal_xpui back-stays @1448x1072 board=both
+# events: b
+# frames: 2, then waiting
+# line heights 18 34 43
+fill 0,0 1448x1072 c1
+text 16,11 1432x34 f1 left c4 m1 bold ink 16,11 151x34 | 4:00 PM  72%
+line 0,48 - 1447,48 w1 c4
+fill 16,60 4x40 c4
+stroke 16,60 1416x40 w1 c4
+text 28,63 1420x34 f1 left c4 m1 ink 28,63 203x34 | Continue Reading
+text 28,107 1420x34 f1 left c4 m1 ink 28,107 79x34 | Library
+text 28,151 1420x34 f1 left c4 m1 ink 28,151 50x34 | Files
+text 28,195 1420x34 f1 left c4 m1 ink 28,195 50x34 | Dice
+text 28,239 1420x34 f1 left c4 m1 ink 28,239 93x34 | Settings

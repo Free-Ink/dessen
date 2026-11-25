@@ -1,0 +1,5 @@
+# Hello: one screen, and Back leaves.
+app = hello_xpui
+
+walk root expect="Hello from xpui" :
+walk back : b
