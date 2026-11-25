@@ -124,7 +124,8 @@ reference in [`tests/xpui/README.md`](../../../tests/xpui/README.md). In short:
 - `make xpui-screens` writes the goldens on the first run and fails; open every
   PNG, then run again. Commit the goldens with the app.
 - When a screen fails after a change: read what moved, look at
-  `build/screen-diffs/`, fix it or (if meant) `make xpui-bless` and say so.
+  `build/screen-diffs/`, fix it or (if meant) `make xpui-bless APP=<app>`
+  and say so. Change and bless one app at a time.
   Never bless unseen; never raise `SCREEN_TOLERANCE`.
 - Logic that draws nothing: a crate in `tests/xpui/unit/` (copy `lightsout/`).
 
@@ -219,6 +220,6 @@ make rust     # build + run the Rust example (needs the Rust toolchain)
 make zig      # build + run the Zig example (needs Zig)
 make size     # ESP32-C3 flash cost of the VM + binding
 make xpui-screens   # xpui screen tests (pictures + positions, 3 sizes)
-make xpui-bless     # accept deliberate screen changes, after looking
+make xpui-bless APP=nook   # accept one app's deliberate screen changes, after looking
 make xpui-unit      # xpui host unit tests
 ```

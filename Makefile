@@ -221,11 +221,13 @@ xpui: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
 # the apps' pure logic, unit-tested on the host. After a deliberate change,
 # look at build/screen-diffs/, then `make xpui-bless`. `make xpui-standards`
 # lists what each app still breaks of the screen standards.
+# APP=nook runs (or blesses) one app's walks only.
 XPUI_SCENARIOS = $(wildcard tests/xpui/*.scenarios)
+XPUI_ONLY = $(if $(APP),--only $(APP)_xpui)
 xpui-screens: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
-	@python3 tools/screen_test.py $(XPUI_SCENARIOS)
+	@python3 tools/screen_test.py $(XPUI_ONLY) $(XPUI_SCENARIOS)
 xpui-bless: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
-	@python3 tools/screen_test.py --update $(XPUI_SCENARIOS)
+	@python3 tools/screen_test.py --update $(XPUI_ONLY) $(XPUI_SCENARIOS)
 xpui-standards: $(XPUI_APPS:%=build/%_xpui.bin) build/dessen
 	@python3 tools/screen_test.py --standards $(XPUI_SCENARIOS)
 xpui-unit:

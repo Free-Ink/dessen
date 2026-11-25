@@ -65,7 +65,8 @@ make size     # ESP32-C3 flash cost of the VM and the binding
 zig build     # the Zig apps with Zig alone (build.zig, also read by zls); zig build run -Dapp=hello
 make FREEINK_SDK=/path/to/freeink-sdk test   # if the SDK isn't a sibling dir
 make xpui-screens   # the xpui screen tests only: pictures + element positions, 3 sizes
-make xpui-bless     # rewrite the goldens after a deliberate change (look first!)
+make xpui-screens APP=nook   # one app's walks
+make xpui-bless APP=nook     # rewrite its goldens after a deliberate change (look first!)
 make xpui-standards # what each xpui app still breaks of the screen standards
 make xpui-unit      # the xpui apps' host unit tests only
 ```
@@ -140,16 +141,20 @@ For a **new** app:
    app.
 
 For a **change** to how an app draws (a refactor, a new xpui component, a
-framework migration):
+framework migration), work one app at a time. The committed goldens are the
+reference, so there is nothing to record first.
 
-1. `make xpui-screens` passes before you start.
-2. After the change, each failure names what moved (`text 'How to Play' moved
-   +0,+2`) and writes a diff image to `build/screen-diffs/<app>/` (red = moved
-   beyond tolerance). Look at it.
+1. Change one app, then run `make xpui-screens APP=<app>`.
+2. Each failure names what moved (`text 'How to Play' moved +0,+2`) and
+   writes a diff image to `build/screen-diffs/<app>/` (red = moved beyond
+   tolerance). Look at it.
 3. Unintended: fix the code. Intended: tell the user what moved and why, then
-   `make xpui-bless`, open the changed PNGs, and commit them with the code.
+   `make xpui-bless APP=<app>` (never bless all apps for a one-app change)
+   and open the rewritten PNGs.
 4. A walk that now fails "did not reach its screen" means its tap missed the
    new layout: re-aim the tap, don't delete the walk.
+5. `make test`, then commit the app with its blessed goldens before the next
+   app.
 
 ## Recipe: add a capability (one new call)
 

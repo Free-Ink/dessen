@@ -51,24 +51,55 @@ that draws nothing. An app is not done until all of this is in and
 ## Changing or migrating an app's screens
 
 When you change how an app draws (a new xpui core, a new component, a
-refactor), its screens must come out the same:
+refactor), its screens must come out the same.
 
-1. Run `make xpui-screens` before you start; it must pass.
-2. Make the change, then run `make xpui-screens` again.
-3. For each failure, read the element list and open the diff image in
-   `build/screen-diffs/<app>/`:
-   - **Nothing should have moved:** fix the code until it passes. The
-     element list says what moved and by how much.
-   - **The change is meant** (the design asked for it): run `make xpui-bless`,
-     open the changed PNGs in `tests/xpui/golden/`, and commit them in the
-     same commit as the code. The reviewer then sees the picture change next
-     to its cause.
-4. When an app meets another screen standard after the change, add it to its
-   `standards =` line.
+The reference is the committed goldens in `golden/<app>/`, not an earlier
+run: every run compares against those files. They change only when you bless.
+So there is nothing to record before you start. If `make test` passed on the
+commit you start from, you have a clean baseline.
 
-Never edit a golden by hand, never bless without looking at the pictures,
-and never raise `SCREEN_TOLERANCE` to make a failure go away: a screen that
-moved more than 1 px moved.
+### One app at a time
+
+Migrating several apps one after another works best app by app:
+
+1. Change one app.
+2. Run `make xpui-screens APP=<app>` (for example `APP=nook`): only that
+   app's walks, a few seconds. `make test` runs every app.
+3. For each failure, read what moved (`text 'How to Play' moved +0,+2`) and
+   open the diff image in `build/screen-diffs/<app>/`. Red is ink that moved
+   more than 1 px, black is ink that held.
+   - **Nothing should have moved:** fix the code and run again.
+   - **A walk "did not reach its screen":** its tap missed the new layout.
+     Re-aim the tap; don't delete the walk.
+   - **It moved on purpose** (the new component sits 4 px lower, and that
+     is right): run `make xpui-bless APP=<app>`, open the PNGs it rewrote in
+     `golden/<app>/`, and check they show what you meant.
+4. Run `make test`; everything passes.
+5. Commit the app's code together with any goldens you blessed, so a reviewer
+   sees the picture change next to its cause. Then go to the next app.
+
+Apps you have not touched keep passing against their own goldens the whole
+time. `APP=` matters for blessing. Without it, `make xpui-bless` rewrites
+every golden that differs, in every app, and could hide a change you did not
+mean in an app you did not look at.
+
+When an app meets another screen standard after the change, add it to its
+`standards =` line, so it cannot regress.
+
+### Rules
+
+- Never edit a golden by hand.
+- Never bless without looking at the pictures.
+- Never raise `SCREEN_TOLERANCE` to make a failure go away: a screen that
+  moved more than 1 px moved.
+
+### In a pull request
+
+CI runs `make test` on every pull request (see [In CI](#in-ci)). When a
+screen test fails there, open the run's summary page and download the
+`screen-diffs` artifact: the same diff images as `build/screen-diffs/`
+locally. The goldens are made on macOS and CI runs on Linux. Both draw the
+same pixels, so a golden blessed on a Mac passes in CI.
 
 ## Screen tests
 
@@ -128,7 +159,7 @@ one walk per size, with `expect=`.
 ### When a screen fails
 
 - **It moved and you meant it** (the new component looks better 4 px lower):
-  look at the diff image and the element list, then `make xpui-bless`. Commit
+  look at the diff image and the element list, then `make xpui-bless APP=<app>`. Commit
   the goldens with the change, so a reviewer sees the picture change next to
   the code that made it.
 - **It moved and you did not mean it**: that is the regression this is for.
@@ -137,8 +168,9 @@ one walk per size, with `expect=`.
 A new walk writes its goldens on the first run and **fails**, so nobody
 commits a picture they never looked at. Open the PNG, then run again.
 
+`make xpui-screens APP=nook` runs one app's walks.
 `python3 tools/screen_test.py --only nook_xpui/help tests/xpui/nook.scenarios`
-runs one walk (`--only nook_xpui` one app; `--show` prints its draw calls).
+runs one walk; `--show` prints its draw calls.
 
 ### Rules every screen keeps, and the screen standards
 
