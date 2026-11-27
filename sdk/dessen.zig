@@ -56,6 +56,7 @@ pub const DSN_SYS_BOOK_PROGRESS: usize = 100;
 pub const DSN_SYS_OPEN_HOME: usize = 101;
 pub const DSN_SYS_WIFI_CONNECT: usize = 103;
 pub const DSN_SYS_BOOK_COVER: usize = 105;
+pub const DSN_SYS_QR_BITMAP: usize = 108;
 
 fn call0(n: usize) i32 {
     return asm volatile ("ecall"
@@ -189,3 +190,4 @@ pub fn book_progress(path: []const u8) i32 { return call2(DSN_SYS_BOOK_PROGRESS,
 pub fn open_home(dest: i32) i32 { return call1(DSN_SYS_OPEN_HOME, @as(usize, (@as(u32, @bitCast(dest)) & 0xff))); }
 pub fn wifi_connect() i32 { return call0(DSN_SYS_WIFI_CONNECT); }
 pub fn book_cover(path: []const u8, height: i32, pixels: []u8) i32 { return call5(DSN_SYS_BOOK_COVER, @intFromPtr(path.ptr), path.len, @as(usize, (@as(u32, @bitCast(height)) & 0xffff)), @intFromPtr(pixels.ptr), pixels.len); }
+pub fn qr_bitmap(data: []const u8, pixels: []u8) i32 { return call4(DSN_SYS_QR_BITMAP, @intFromPtr(data.ptr), data.len, @intFromPtr(pixels.ptr), pixels.len); }

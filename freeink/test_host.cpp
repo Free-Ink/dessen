@@ -308,8 +308,38 @@ static void testManifest() {
   assert(parseRequires(R"({"requires":["stylus"]})", needs) && !meets(needs, true, true, true));
 }
 
+struct MockQr : dessen::Services {
+  int calls = 0;
+  int qrBitmap(const uint8_t* data, uint32_t len, uint8_t* out, uint32_t cap) override {
+    ++calls;
+    assert(len == 3 && data[0] == 'a' && data[1] == 0 && data[2] == 'b');
+    if (cap < 67) return DSN_ERR_TOO_BIG;
+    memset(out, 0, 67);
+    out[0] = out[2] = 21;
+    out[4] = 0x80;
+    return 67;
+  }
+};
+
+static void testQr(const char* path) {
+  for (bool supported : {false, true}) {
+    dessen::FreeInkHost host;
+    MockQr qr;
+    assert(host.load(mem, readApp(path), sizeof mem));
+    if (supported) host.setServices(&qr);
+    TraceTarget target;
+    DeviceContext dev;
+    dev.width = 400;
+    dev.height = 300;
+    InputSnapshot none;
+    while (host.step(target, dev, none) == dessen::State::Running) {}
+    assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
+    assert(qr.calls == (supported ? 2 : 0));
+  }
+}
+
 int main(int argc, char** argv) {
-  assert(argc == 9);
+  assert(argc == 10);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -504,6 +534,7 @@ int main(int argc, char** argv) {
   testDesktopStorage();
   testHome(argv[8]);
   testManifest();
+  testQr(argv[9]);
 
   puts("freeink binding: PASS");
   return 0;

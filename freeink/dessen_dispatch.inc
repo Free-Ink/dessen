@@ -642,3 +642,18 @@ case 105: { // book_cover
   a[0] = result;
   break;
 }
+case 108: { // qr_bitmap
+  const uint32_t data_len = a[1];
+  const uint8_t* data = static_cast<const uint8_t*>(dvm_ptr(vm, a[0], data_len));
+  (void)data_len;
+  if (!data) { a[0] = static_cast<uint32_t>(-1); break; }
+  const uint32_t pixels_len = a[3];
+  uint8_t* pixels = static_cast<uint8_t*>(dvm_ptr(vm, a[2], pixels_len));
+  (void)pixels_len;
+  const uint32_t pixels_addr = a[2]; (void)pixels_addr;
+  if (!pixels) { a[0] = static_cast<uint32_t>(-1); break; }
+  uint32_t result = 0;
+  result = svcQrBitmap(self, data, data_len, pixels, pixels_len);
+  a[0] = result;
+  break;
+}

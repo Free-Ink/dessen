@@ -71,6 +71,12 @@ class Services {
   // the first time (the cover is decoded and cached), so request one per redraw.
   virtual int bookCover(const char*, uint32_t, uint8_t*, uint32_t) { return -4; }
 
+  // Encode bytes as a QR code, choosing a supported version and error correction
+  // level. Output: LE u16 width, u16 height, then MSB-first rows (byte padded,
+  // 1 = dark), no quiet zone. Return bytes written or DSN_ERR_*; leave output
+  // unchanged on failure. Host may reject payloads beyond its encoder limits.
+  virtual int qrBitmap(const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
+
   // ---- crypto (synchronous) ----  return bytes written, or a DSN_ERR_*
   virtual int hash(int, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int aesCbc(int, const uint8_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }  // keyiv = 32 bytes
