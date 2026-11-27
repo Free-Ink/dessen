@@ -295,6 +295,47 @@ int svcProgress(FreeInkHost& self, const uint8_t* path, uint32_t pathLen) {
   return s->bookProgress(pbuf);
 }
 
+int svcReadingStatsRead(FreeInkHost& self, uint32_t kind, uint32_t first,
+                        uint8_t* data, uint32_t cap) {
+  switch (kind) {
+    case DSN_STATS_CAPABILITY:
+    case DSN_STATS_RELEASE:
+      if (first || cap) return DSN_ERR_INVALID;
+      break;
+    case DSN_STATS_SUMMARY:
+      if (first) return DSN_ERR_INVALID;
+      if (cap < DSN_STATS_SUMMARY_BYTES) return DSN_ERR_TOO_BIG;
+      cap = DSN_STATS_SUMMARY_BYTES;
+      break;
+    case DSN_STATS_DAYS:
+    case DSN_STATS_BOOKS:
+      if (!cap || cap % DSN_STATS_DAY_BYTES ||
+          cap / DSN_STATS_DAY_BYTES > DSN_STATS_PAGE_MAX) return DSN_ERR_INVALID;
+      break;
+    case DSN_STATS_BOOK_INFO:
+      if (!cap || cap % DSN_STATS_BOOK_INFO_BYTES ||
+          cap / DSN_STATS_BOOK_INFO_BYTES > DSN_STATS_BOOK_INFO_MAX) return DSN_ERR_INVALID;
+      break;
+    default: return DSN_ERR_INVALID;
+  }
+  return self.services() ? self.services()->readingStatsRead(kind, first, data, cap) : DSN_ERR_UNAVAILABLE;
+}
+
+bool validReadingSelector(const uint8_t* book, uint32_t len) {
+  if (!len) return true;
+  if (book[0] == '/') {
+    char path[DSN_BOOK_PATH_MAX + 1];
+    return len > 1 && guestPath(book, len, path, DSN_BOOK_PATH_MAX) && book[len - 1] != '/';
+  }
+  if (len != 32) return false;
+  for (uint32_t i = 0; i < len; ++i) {
+    const uint8_t c = book[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+      return false;
+  }
+  return true;
+}
+
 int svcBookCover(FreeInkHost& self, const uint8_t* path, uint32_t pathLen, uint32_t height,
                  uint8_t* pixels, uint32_t cap) {
   Services* s = svc(self);
@@ -470,6 +511,18 @@ int FreeInkHost::beginFetch(const uint8_t* url, uint32_t urlLen, const uint8_t* 
 int FreeInkHost::beginTextInput(const char* prompt, uint8_t* out, uint32_t cap) {
   if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
   const int code = services_->textInputStart(prompt, reinterpret_cast<char*>(out), cap);
+  if (code == kPending) return kBusy;
+  vm_.x[10] = u(code);
+  return 0;
+}
+
+int FreeInkHost::beginReadingStats(const uint8_t* book, uint32_t bookLen, uint32_t anchorDay) {
+  if (bookLen > DSN_BOOK_PATH_MAX || !validReadingSelector(book, bookLen)) {
+    vm_.x[10] = u(DSN_ERR_INVALID);
+    return 0;
+  }
+  if (!services_) { vm_.x[10] = u(DSN_ERR_UNAVAILABLE); return 0; }
+  const int code = services_->readingStatsStart(book, bookLen, anchorDay);
   if (code == kPending) return kBusy;
   vm_.x[10] = u(code);
   return 0;

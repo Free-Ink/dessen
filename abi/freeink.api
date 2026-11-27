@@ -103,3 +103,7 @@
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 103 wifi_connect() -> i32 : return self.beginWifi();
 105 book_cover(buf path, u16 height, out pixels) -> i32 : result = svcBookCover(self, path, path_len, height, pixels, pixels_len);
+
+# --- optional read-only reading history ---
+110 reading_stats_start(buf book, u32 anchor_day) -> i32 : return self.beginReadingStats(book, book_len, anchor_day);
+111 reading_stats_read(u32 kind, u32 first, out data) -> i32 : result = svcReadingStatsRead(self, kind, first, data, data_len);

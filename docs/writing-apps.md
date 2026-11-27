@@ -804,3 +804,59 @@ shape, frontlight, a file read), you add **one line** to
 regenerates both the app-side wrapper and the firmware-side dispatch. See
 `AGENTS.md` for the recipe and the rules every new call must follow (clip, pin,
 bounds-check — every app value is untrusted).
+
+## Optional read-only reading history
+
+A host may offer local reading-history queries to applications. Probe
+`dsn_reading_stats_read(DSN_STATS_CAPABILITY, 0, buffer, 0)`; version 1
+returns 1, unsupported services return UNAVAILABLE. Unknown older syscalls
+may return INVALID. Neither error means an empty history. Hosts must
+authorize access to the history and any selected book.
+
+- `dsn_reading_stats_start(book, len, anchor_day)`: async query. Empty
+  selector means device totals; a 32-hex document ID or authorized absolute
+  book path selects a book as well. The anchor is a local Unix day number;
+  zero means use the latest valid recorded date. Returns 0 on success,
+  DSN_STATS_NO_HISTORY (1) if absent, or an error including
+  DSN_STATS_NO_MEMORY (-6). A new query replaces the previous snapshot.
+- `dsn_reading_stats_read(kind, first, out, cap)`: reads completed query
+  results, not the source book. All integers are unsigned little-endian.
+  Returns bytes written except for capability and release. On failure,
+  the host must not modify the output.
+
+Version 1 read kinds:
+
+| Kind | Meaning |
+|---|---|
+| 0 | Capability, first=0, empty output. |
+| 1 | Summary, first=0, exactly 192 bytes. |
+| 2 | Days, first=local Unix day, up to 64 whole 16-byte records. |
+| 3 | Books, first=zero-based index, up to 64 whole 16-byte IDs. |
+| 4 | Release, first=0, empty output, returns 0. |
+| 5 | Book metadata, first=zero-based index, up to 8 whole 100-byte records. |
+
+Summary layout: at offsets 0,4,8,12,16,20,24,28 are u32 version, flags
+(bit 0: book count limited, bit 1: incomplete source tail), anchor day,
+latest day, active days in the window, selected book active days,
+distinct book count, reserved zero. Offsets 32 and 40 are u64 source
+byte count and rejected records (zero if not applicable). Offsets 48
+and 104 hold 56-byte device and selected-book totals respectively:
+u64 seconds, sessions, dated sessions, then four u64 durations for
+morning (06:00–12:00), afternoon (12:00–17:00), evening (17:00–21:00) and night (21:00–06:00).
+Offset 160 holds four u64 period durations for the seven days ending at
+the anchor.
+
+Each day record contains overall and selected-book seconds (u64).
+The window covers up to 371 days ending at the anchor; absent day buckets
+are zero. Each book ID is an opaque packed 16-byte identifier. Retain up
+to 1024 IDs in ascending order and set the limited flag on overflow.
+Book metadata: bytes 0–15 ID, 16–17 progress in basis points (65535 means
+unknown), 18 title byte length (0–80), 19 reserved zero, 20–99 zero-padded
+UTF-8 title. End of a page returns zero bytes. Metadata represents recorded
+history, not live book state. Undated sessions count toward lifetime totals,
+not calendar or time-of-day totals.
+
+Release the snapshot before memory-intensive operations. The host may
+discard a snapshot when needed. No reading history is changed or uploaded
+by these calls; no source file format, device identity, ownership claim or
+external service is part of the contract.

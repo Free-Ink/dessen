@@ -308,8 +308,73 @@ static void testManifest() {
   assert(parseRequires(R"({"requires":["stylus"]})", needs) && !meets(needs, true, true, true));
 }
 
+struct MockHistory : dessen::Services {
+  bool ready = false, pending = false;
+  int starts = 0, polls = 0, reads = 0;
+  int readingStatsStart(const uint8_t* book, uint32_t len, uint32_t anchor) override {
+    ++starts;
+    ready = false;
+    if (len == 32) {
+      assert(memcmp(book, "0123456789abcdef0123456789abcdef", 32) == 0 && anchor == 0);
+      return DSN_STATS_NO_HISTORY;
+    }
+    assert(len == 0 && anchor == 20000);
+    pending = true;
+    return dessen::kPending;
+  }
+  int poll() override {
+    assert(pending);
+    ++polls;
+    pending = false;
+    ready = true;
+    return 0;
+  }
+  int readingStatsRead(uint32_t kind, uint32_t first, uint8_t* data, uint32_t cap) override {
+    ++reads;
+    if (kind == DSN_STATS_CAPABILITY) { assert(first == 0 && cap == 0); return DSN_STATS_VERSION; }
+    if (kind == DSN_STATS_RELEASE) { assert(first == 0 && cap == 0); ready = false; return 0; }
+    if (!ready) return DSN_ERR_UNAVAILABLE;
+    memset(data, 0, cap);
+    switch (kind) {
+      case DSN_STATS_SUMMARY:
+        assert(first == 0 && cap == 192);
+        data[0] = DSN_STATS_VERSION; data[48] = 60; return 192;
+      case DSN_STATS_DAYS:
+        assert(first == 20000 && cap == 16); data[0] = 60; return 16;
+      case DSN_STATS_BOOKS:
+        assert(first == 0 && cap == 16); data[0] = 0x42; return 16;
+      case DSN_STATS_BOOK_INFO:
+        assert(first == 0 && cap == 100);
+        data[0] = 0x42; data[18] = 1; data[20] = 'B'; return 100;
+      default: assert(false); return DSN_ERR_INVALID;
+    }
+  }
+};
+
+static void testHistory(const char* path) {
+  for (bool supported : {false, true}) {
+    dessen::FreeInkHost host;
+    MockHistory history;
+    assert(host.load(mem, readApp(path), sizeof mem));
+    if (supported) host.setServices(&history);
+    TraceTarget target;
+    DeviceContext dev;
+    dev.width = 400;
+    dev.height = 300;
+    InputSnapshot none;
+    auto state = host.step(target, dev, none);
+    if (supported) assert(state == dessen::State::Busy);
+    while (state == dessen::State::Running || state == dessen::State::Busy)
+      state = host.step(target, dev, none);
+    assert(state == dessen::State::Exited && host.exitCode() == 0);
+    assert(history.starts == (supported ? 2 : 0));
+    assert(history.polls == (supported ? 1 : 0));
+    assert(history.reads == (supported ? 7 : 0));
+  }
+}
+
 int main(int argc, char** argv) {
-  assert(argc == 9);
+  assert(argc == 10);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -504,6 +569,7 @@ int main(int argc, char** argv) {
   testDesktopStorage();
   testHome(argv[8]);
   testManifest();
+  testHistory(argv[9]);
 
   puts("freeink binding: PASS");
   return 0;
