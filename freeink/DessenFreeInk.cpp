@@ -295,6 +295,17 @@ int svcProgress(FreeInkHost& self, const uint8_t* path, uint32_t pathLen) {
   return s->bookProgress(pbuf);
 }
 
+int svcQrBitmap(FreeInkHost& self, const uint8_t* data, uint32_t len, uint8_t* pixels, uint32_t cap) {
+  if (!len || len > 2953) return DSN_ERR_INVALID; // QR version 40-L byte capacity
+  if (cap < 4) return DSN_ERR_TOO_BIG;
+  // Input must remain intact throughout encoding, even with a malformed guest.
+  const auto src = reinterpret_cast<uintptr_t>(data);
+  const auto dst = reinterpret_cast<uintptr_t>(pixels);
+  if ((src <= dst && dst - src < len) || (dst < src && src - dst < cap))
+    return DSN_ERR_INVALID;
+  return self.services() ? self.services()->qrBitmap(data, len, pixels, cap) : DSN_ERR_UNAVAILABLE;
+}
+
 int svcBookCover(FreeInkHost& self, const uint8_t* path, uint32_t pathLen, uint32_t height,
                  uint8_t* pixels, uint32_t cap) {
   Services* s = svc(self);

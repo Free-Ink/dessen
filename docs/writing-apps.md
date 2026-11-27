@@ -804,3 +804,15 @@ shape, frontlight, a file read), you add **one line** to
 regenerates both the app-side wrapper and the firmware-side dispatch. See
 `AGENTS.md` for the recipe and the rules every new call must follow (clip, pin,
 bounds-check — every app value is untrusted).
+
+### QR bitmaps
+
+`dsn_qr_bitmap(data, len, pixels, cap)` asks the host to encode a QR code.
+The input is length-delimited bytes (1–2953 bytes; a host may support less).
+Input and output buffers must not overlap. The result is the byte count,
+or a negative `DSN_ERR_*` (including UNAVAILABLE on hosts without an encoder).
+A successful result starts with little-endian u16 width and height, followed
+by byte-padded rows of MSB-first module bits (1 = dark). The host chooses the
+QR version and correction level. Add a four-module white quiet zone when
+drawing, and use integer scaling. No framebuffer drawing or network access
+is performed by the call. The host must leave the output unchanged on error.
