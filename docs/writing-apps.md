@@ -119,7 +119,9 @@ and a buttons-only one:
 - `TAP` / `LONG_PRESS` — a touch and a press-and-hold; both carry `x, y`
   (`DSN_EV_X/Y(e)`).
 - `SWIPE_UP` / `SWIPE_DOWN` / `SWIPE_LEFT` / `SWIPE_RIGHT` — the four touch
-  swipes (no coordinates). Use vertical swipes to **page/scroll**.
+  swipes. A host may provide the touch origin in safe-area coordinates via
+`DSN_EV_X/Y(e)`; both zero also represent an absent origin, so apps must
+retain a direction-only path. Use vertical swipes to **page/scroll**.
 
 A board with up/down keys *and* touch (most of them) delivers both, so these stay
 distinct: keys move the selection, a swipe pages, a tap opens. Always offer a

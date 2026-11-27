@@ -30,18 +30,24 @@ View viewOf(const DeviceContext& device) {
   return View{safe.width, safe.height, safe.x, safe.y};
 }
 
-uint32_t eventOf(const InputSnapshot& in, View view, FreeInkHost::Swipe swipe, bool sideways) {
+uint32_t eventOf(const InputSnapshot& in, View view, FreeInkHost::Swipe swipe, bool sideways, int16_t swipeX, int16_t swipeY) {
   if (in.confirm) return DSN_EV_CONFIRM;
   if (in.back) return DSN_EV_BACK;
+  // Invalid or absent origins retain the direction-only event. The 12-bit
+  // coordinate fields must not wrap if the panel is unusually large.
+  const int32_t x = swipeX - view.originX, y = swipeY - view.originY;
+  const uint32_t origin = x >= 0 && y >= 0 && x < view.width && y < view.height &&
+                          x <= 0xfff && y <= 0xfff
+      ? (static_cast<uint32_t>(x) << 8) | (static_cast<uint32_t>(y) << 20) : 0;
   switch (swipe) {
-    case FreeInkHost::SwipeUp: return DSN_EV_SWIPE_UP;
-    case FreeInkHost::SwipeDown: return DSN_EV_SWIPE_DOWN;
-    case FreeInkHost::SwipeLeft: return DSN_EV_SWIPE_LEFT;
-    case FreeInkHost::SwipeRight: return DSN_EV_SWIPE_RIGHT;
+    case FreeInkHost::SwipeUp: return DSN_EV_SWIPE_UP | origin;
+    case FreeInkHost::SwipeDown: return DSN_EV_SWIPE_DOWN | origin;
+    case FreeInkHost::SwipeLeft: return DSN_EV_SWIPE_LEFT | origin;
+    case FreeInkHost::SwipeRight: return DSN_EV_SWIPE_RIGHT | origin;
     default: break;
   }
-  if (in.swipeLeft) return DSN_EV_SWIPE_LEFT;
-  if (in.swipeRight) return DSN_EV_SWIPE_RIGHT;
+  if (in.swipeLeft) return DSN_EV_SWIPE_LEFT | origin;
+  if (in.swipeRight) return DSN_EV_SWIPE_RIGHT | origin;
   const uint32_t key = sideways ? DSN_EV_SIDEWAYS : 0;
   if (in.prev || in.focusPrev) return DSN_EV_PREV | key;
   if (in.next || in.focusNext) return DSN_EV_NEXT | key;
@@ -316,6 +322,7 @@ uint32_t FreeInkHost::nextRandom() {
 bool FreeInkHost::load(uint8_t* mem, uint32_t len, uint32_t memCap) {
   refresh_ = false;
   clipped_ = clipTouched_ = sideways_ = false;
+  swipeX_ = swipeY_ = -1;
   state_ = dvm_load(&vm_, mem, len, memCap) ? State::Running : State::Faulted;
   return state_ == State::Running;
 }
@@ -329,13 +336,15 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
                         uint32_t budget) {
   const bool sideways = sideways_; // about this step's input only, whatever the state
   sideways_ = false;
+  const int16_t swipeX = swipeX_, swipeY = swipeY_;
+  swipeX_ = swipeY_ = -1;
   if (state_ == State::Exited || state_ == State::Faulted) return state_;
   if (state_ == State::Busy) {
     const int code = services_ ? services_->poll() : DSN_ERR_IO;
     if (code == kPending) return state_; // still working; try again next tick
     vm_.x[10] = static_cast<uint32_t>(code); // result ready: resume the VM below
   } else if (state_ == State::Waiting) {
-    const uint32_t ev = eventOf(input, viewOf(device), swipe, sideways);
+    const uint32_t ev = eventOf(input, viewOf(device), swipe, sideways, swipeX, swipeY);
     if (!ev) return state_;
     vm_.x[10] = ev; // wait_event's return value
   }

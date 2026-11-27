@@ -350,6 +350,31 @@ int main(int argc, char** argv) {
     assert(host.exitCode() == (left ? DSN_EV_SWIPE_LEFT : DSN_EV_SWIPE_RIGHT));
   }
 
+  // Optional origins use the same safe-area coordinate space as taps. The
+  // metadata is one-shot and an out-of-area origin does not hide the swipe.
+  for (auto dir : {std::pair{Host::SwipeUp, DSN_EV_SWIPE_UP}, {Host::SwipeDown, DSN_EV_SWIPE_DOWN},
+                   {Host::SwipeLeft, DSN_EV_SWIPE_LEFT}, {Host::SwipeRight, DSN_EV_SWIPE_RIGHT}}) {
+    assert(host.load(mem, readApp(argv[1]), sizeof mem));
+    while (host.step(target, screen, none) == dessen::State::Running) {}
+    host.markSwipeOrigin(123, 234);
+    assert(host.step(target, screen, none, dir.first) == dessen::State::Exited);
+    const uint32_t event = static_cast<uint32_t>(host.exitCode());
+    assert(DSN_EV_TYPE(event) == static_cast<uint32_t>(dir.second));
+    assert(DSN_EV_X(event) == 123 && DSN_EV_Y(event) == 234);
+  }
+  assert(host.load(mem, readApp(argv[1]), sizeof mem));
+  while (host.step(target, screen, none) == dessen::State::Running) {}
+  host.markSwipeOrigin(-1, 123);
+  assert(host.step(target, screen, none, Host::SwipeUp) == dessen::State::Exited);
+  assert(host.exitCode() == DSN_EV_SWIPE_UP);
+
+  assert(host.load(mem, readApp(argv[1]), sizeof mem));
+  while (host.step(target, screen, none) == dessen::State::Running) {}
+  host.markSwipeOrigin(123, 234);
+  assert(host.step(target, screen, none) == dessen::State::Waiting);
+  assert(host.step(target, screen, none, Host::SwipeRight) == dessen::State::Exited);
+  assert(host.exitCode() == DSN_EV_SWIPE_RIGHT);
+
   // oob: a sandbox escape attempt ends as a fault, not a crash.
   assert(host.load(mem, readApp(argv[2]), sizeof mem));
   assert(host.step(target, screen, none) == dessen::State::Faulted);
@@ -453,6 +478,17 @@ int main(int argc, char** argv) {
   edge.touchY = 110;
   assert(host.step(target, bezel, edge) == dessen::State::Exited);
   assert(static_cast<uint32_t>(host.exitCode()) == (DSN_EV_TAP | 100u << 8 | 100u << 20));
+
+  assert(host.load(mem, readApp(argv[1]), sizeof mem));
+  while (host.step(target, bezel, none) == dessen::State::Running) {}
+  host.markSwipeOrigin(140, 110);
+  assert(host.step(target, bezel, none, Host::SwipeDown) == dessen::State::Exited);
+  assert(static_cast<uint32_t>(host.exitCode()) == (DSN_EV_SWIPE_DOWN | 100u << 8 | 100u << 20));
+  assert(host.load(mem, readApp(argv[1]), sizeof mem));
+  while (host.step(target, bezel, none) == dessen::State::Running) {}
+  host.markSwipeOrigin(5, 5);
+  assert(host.step(target, bezel, none, Host::SwipeDown) == dessen::State::Exited);
+  assert(host.exitCode() == DSN_EV_SWIPE_DOWN);
 
   // drawtest again inside the bezel: it checks dsn_device() against dsn_screen(),
   // and its clip moves inside the bezel with everything else. Without hint
