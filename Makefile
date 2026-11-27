@@ -101,7 +101,7 @@ test: $(if $(WITH_RUST),rust-check) all $(if $(WITH_RUST),rust xpui)
 	  printf 'the book bytes here' > $$nr/example.test/book.bin; \
 	  DESSEN_NET_ROOT=$$nr DESSEN_FS_ROOT=$$fs build/dessen build/nettest.bin; rc=$$?; \
 	  rm -rf $$nr $$fs; test $$rc -eq 0 && echo 'nettest: PASS'
-	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/home.bin
+	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/home.bin build/captest.bin
 	@echo PASS
 
 # Fails early, with the fix, when `test`/`sd` would need Rust that is not here.

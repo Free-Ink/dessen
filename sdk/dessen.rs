@@ -56,6 +56,8 @@ pub const DSN_SYS_BOOK_PROGRESS: usize = 100;
 pub const DSN_SYS_OPEN_HOME: usize = 101;
 pub const DSN_SYS_WIFI_CONNECT: usize = 103;
 pub const DSN_SYS_BOOK_COVER: usize = 105;
+pub const DSN_SYS_SCREENSHOT: usize = 106;
+pub const DSN_SYS_FS_RENAME: usize = 107;
 
 #[inline]
 unsafe fn dsn_call0(n: usize) -> i32 {
@@ -293,3 +295,7 @@ pub fn dsn_open_home(dest: i32) -> i32 { unsafe { dsn_call1(DSN_SYS_OPEN_HOME, (
 pub fn dsn_wifi_connect() -> i32 { unsafe { dsn_call0(DSN_SYS_WIFI_CONNECT) } }
 #[inline]
 pub fn dsn_book_cover(path: &[u8], height: i32, pixels: &mut [u8]) -> i32 { unsafe { dsn_call5(DSN_SYS_BOOK_COVER, path.as_ptr() as usize, path.len(), ((height as u32 & 0xffff)) as usize, pixels.as_mut_ptr() as usize, pixels.len()) } }
+#[inline]
+pub fn dsn_screenshot(path: &[u8]) -> i32 { unsafe { dsn_call2(DSN_SYS_SCREENSHOT, path.as_ptr() as usize, path.len()) } }
+#[inline]
+pub fn dsn_fs_rename(source: &[u8], dest: &[u8]) -> i32 { unsafe { dsn_call4(DSN_SYS_FS_RENAME, source.as_ptr() as usize, source.len(), dest.as_ptr() as usize, dest.len()) } }
