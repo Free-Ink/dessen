@@ -51,6 +51,10 @@ class FreeInkHost {
   // the step consumes it whatever state the app is in.
   void markSideways() { sideways_ = true; }
 
+  // Optional touch-swipe origin in panel coordinates, consumed on the next
+  // step just like markSideways(). Direction-only hosts need not set it.
+  void markSwipeOrigin(int16_t x, int16_t y) { swipeX_ = x; swipeY_ = y; }
+
   // Entropy for the app's random() call, e.g. esp_random. Without one the
   // app gets a weak fallback sequence, fine for tests and nothing else.
   void setRandom(uint32_t (*source)()) { random_ = source; }
@@ -111,6 +115,7 @@ class FreeInkHost {
   bool clipped_ = false;
   bool clipTouched_ = false;
   bool sideways_ = false;
+  int16_t swipeX_ = -1, swipeY_ = -1;
 
  public:
   void randomBytesInto(uint8_t* out, uint32_t n); // fills from service or fallback
