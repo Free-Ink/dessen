@@ -320,6 +320,55 @@ bool FreeInkHost::load(uint8_t* mem, uint32_t len, uint32_t memCap) {
   return state_ == State::Running;
 }
 
+bool FreeInkHost::suspendContinuation(Continuation& out) {
+  if (state_ != State::Busy || !vm_.mem || target_) return false;
+  out = {};
+  memcpy(out.registers, vm_.x, sizeof vm_.x);
+  out.pc = vm_.pc;
+  out.memorySize = vm_.mem_size;
+  out.instructions = vm_.icount;
+  out.fallbackSeed = fallbackSeed_;
+  out.clip = clip_;
+  out.clipped = clipped_;
+  out.refreshPending = refresh_;
+  // Memory is host-owned. Drop every VM pointer before the caller frees it.
+  vm_ = {};
+  services_ = nullptr;
+  refresh_ = false;
+  clipped_ = clipTouched_ = sideways_ = false;
+  state_ = State::Suspended;
+  return true;
+}
+
+bool FreeInkHost::restoreContinuation(const Continuation& saved, uint8_t* memory,
+                                      uint32_t memorySize, int result) {
+  if ((state_ != State::Exited && state_ != State::Suspended) || target_ ||
+      saved.version != 1 || !memory || saved.memorySize != memorySize ||
+      memorySize < DSN_HEADER_SIZE || (memorySize & 15) ||
+      (saved.pc & 3) || saved.pc > memorySize - 4 || result == kPending)
+    return false;
+  // All validation precedes mutation. The image is the original memory, not
+  // a new executable, so dvm_load would destroy its live state.
+  vm_ = {};
+  vm_.mem = memory;
+  vm_.mem_size = memorySize;
+  memcpy(vm_.x, saved.registers, sizeof vm_.x);
+  vm_.x[0] = 0;
+  vm_.x[10] = static_cast<uint32_t>(result);
+  vm_.pc = saved.pc;
+  vm_.icount = saved.instructions;
+  fallbackSeed_ = saved.fallbackSeed;
+  clip_ = saved.clip;
+  clipped_ = saved.clipped;
+  refresh_ = saved.refreshPending;
+  clipTouched_ = sideways_ = false;
+  launch_ = Launch::None;
+  launchPath_[0] = 0;
+  launchHomeDest_ = 0;
+  state_ = State::Running;
+  return true;
+}
+
 void FreeInkHost::randomBytesInto(uint8_t* out, uint32_t n) {
   if (services_ && services_->randomBytes(out, n)) return;
   for (uint32_t i = 0; i < n; i++) out[i] = static_cast<uint8_t>(nextRandom());
@@ -329,7 +378,7 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
                         uint32_t budget) {
   const bool sideways = sideways_; // about this step's input only, whatever the state
   sideways_ = false;
-  if (state_ == State::Exited || state_ == State::Faulted) return state_;
+  if (state_ == State::Exited || state_ == State::Faulted || state_ == State::Suspended) return state_;
   if (state_ == State::Busy) {
     const int code = services_ ? services_->poll() : DSN_ERR_IO;
     if (code == kPending) return state_; // still working; try again next tick
