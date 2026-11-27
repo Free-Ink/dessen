@@ -56,6 +56,8 @@ pub const DSN_SYS_BOOK_PROGRESS: usize = 100;
 pub const DSN_SYS_OPEN_HOME: usize = 101;
 pub const DSN_SYS_WIFI_CONNECT: usize = 103;
 pub const DSN_SYS_BOOK_COVER: usize = 105;
+pub const DSN_SYS_READING_STATS_START: usize = 110;
+pub const DSN_SYS_READING_STATS_READ: usize = 111;
 
 fn call0(n: usize) i32 {
     return asm volatile ("ecall"
@@ -189,3 +191,5 @@ pub fn book_progress(path: []const u8) i32 { return call2(DSN_SYS_BOOK_PROGRESS,
 pub fn open_home(dest: i32) i32 { return call1(DSN_SYS_OPEN_HOME, @as(usize, (@as(u32, @bitCast(dest)) & 0xff))); }
 pub fn wifi_connect() i32 { return call0(DSN_SYS_WIFI_CONNECT); }
 pub fn book_cover(path: []const u8, height: i32, pixels: []u8) i32 { return call5(DSN_SYS_BOOK_COVER, @intFromPtr(path.ptr), path.len, @as(usize, (@as(u32, @bitCast(height)) & 0xffff)), @intFromPtr(pixels.ptr), pixels.len); }
+pub fn reading_stats_start(book: []const u8, anchor_day: u32) i32 { return call3(DSN_SYS_READING_STATS_START, @intFromPtr(book.ptr), book.len, @as(usize, anchor_day)); }
+pub fn reading_stats_read(kind: u32, first: u32, data: []u8) i32 { return call4(DSN_SYS_READING_STATS_READ, @as(usize, kind), @as(usize, first), @intFromPtr(data.ptr), data.len); }

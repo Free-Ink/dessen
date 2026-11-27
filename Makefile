@@ -5,7 +5,7 @@ RISCV ?= $(HOME)/.platformio/tools/toolchain-riscv32-esp/bin/riscv32-esp-elf-
 # will fail to link. Add a small runtime to sdk/ when an app first needs one.
 APPFLAGS = -march=rv32im -mabi=ilp32 -Os -ffreestanding -nostdlib -mno-relax \
            -fno-tree-loop-distribute-patterns -Wall -Isdk -T sdk/app.ld -Wl,--no-warn-rwx-segments
-APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal
+APPS = hello selftest oob bench drawtest lightsout dice sudoku captest nettest asynctest home minimal historytest
 SD_APPS = hello lightsout dice sudoku home minimal
 
 # Rust is part of `make test` and `make sd`: the Rust SDK, the hand-linked Rust
@@ -101,7 +101,7 @@ test: $(if $(WITH_RUST),rust-check) all $(if $(WITH_RUST),rust xpui)
 	  printf 'the book bytes here' > $$nr/example.test/book.bin; \
 	  DESSEN_NET_ROOT=$$nr DESSEN_FS_ROOT=$$fs build/dessen build/nettest.bin; rc=$$?; \
 	  rm -rf $$nr $$fs; test $$rc -eq 0 && echo 'nettest: PASS'
-	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/home.bin
+	build/test_freeink build/hello.bin build/oob.bin build/lightsout.bin build/dice.bin build/sudoku.bin build/drawtest.bin build/asynctest.bin build/home.bin build/historytest.bin
 	@echo PASS
 
 # Fails early, with the fix, when `test`/`sd` would need Rust that is not here.

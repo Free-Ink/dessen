@@ -71,6 +71,14 @@ class Services {
   // the first time (the cover is decoded and cached), so request one per redraw.
   virtual int bookCover(const char*, uint32_t, uint8_t*, uint32_t) { return -4; }
 
+  // Optional read-only reading history. An empty selector requests device
+  // totals; otherwise an authorized book path or a 32-hex document ID.
+  // The caller must enforce access to the history and selected book. A query
+  // owns only its temporary result; release or replacement drops it. Async
+  // start follows the normal single pending operation/poll contract.
+  virtual int readingStatsStart(const uint8_t*, uint32_t, uint32_t) { return -4; }
+  virtual int readingStatsRead(uint32_t, uint32_t, uint8_t*, uint32_t) { return -4; }
+
   // ---- crypto (synchronous) ----  return bytes written, or a DSN_ERR_*
   virtual int hash(int, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }
   virtual int aesCbc(int, const uint8_t*, const uint8_t*, uint32_t, uint8_t*, uint32_t) { return -4; }  // keyiv = 32 bytes
