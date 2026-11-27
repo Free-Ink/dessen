@@ -422,6 +422,25 @@ int main(int argc, char** argv) {
   assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
   assert(shows("fill 10,10 50x30 c4") && shows("stroke 0,0 40x40 w3") && shows("triangle"));
   assert(shows("text 0,100 wrapped and centred") && shows("bitmap 200,10 8x8 src 8x8") && target.lines == 1);
+  // Check the actual target font slots, not merely the guest return codes.
+  assert(host.load(mem, readApp(argv[6]), sizeof mem));
+  target.ops.clear();
+  target.detail = true;
+  while (host.step(target, screen, none) == dessen::State::Running) {}
+  assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
+  for (int font = DSN_FONT_NOTOSANS_12; font <= DSN_FONT_NOTOSANS_18; ++font) {
+    bool found = false;
+    for (const auto& op : target.ops)
+      if (op.find(" f" + std::to_string(font) + " ") != std::string::npos &&
+          op.find(" | fixed") != std::string::npos) found = true;
+    assert(found);
+  }
+  assert(shows(" f0 left c4 m1 | fallback"));
+  target.detail = false;
+  // Restore the original trace for the existing clip assertions below.
+  assert(host.load(mem, readApp(argv[6]), sizeof mem));
+  target.ops.clear();
+  while (host.step(target, screen, none) == dessen::State::Running) {}
   // set_clip: clipped to the safe area, the scrim dithers, a negative width
   // lifts the clip, an off-screen one is empty, and the firmware's clip is
   // back once the app stops.

@@ -182,7 +182,12 @@ Colors: `DSN_WHITE / DSN_BLACK / DSN_LIGHT_GRAY / DSN_DARK_GRAY`, and for
 `dsn_fill` only `DSN_SCRIM`: light-gray ink over what is already there, for
 dimming behind a dialog. Whether the background shows through depends on the
 firmware's renderer; on one that cannot, it looks like `DSN_LIGHT_GRAY`.
-Fonts: `DSN_FONT_SMALL / _BODY / _TITLE`. Text flags: `DSN_TEXT_BOLD / _INVERTED`.
+Fonts: `DSN_FONT_SMALL / _BODY / _TITLE`, or optional fixed-size
+`DSN_FONT_NOTOSANS_12 / _14 / _16 / _18` (slots 4–7).
+Hosts bind these slots to their available fonts; always measure the actual
+line height and text width rather than assuming a particular pixel size.
+Slot 3 remains reserved for host label chrome. Unknown IDs use SMALL.
+Text flags: `DSN_TEXT_BOLD / _INVERTED`.
 
 Calls that can fail on bad input (`text_box`, `bitmap`) return `-1`; check it
 during development. The host silently refuses anything out of range — it never

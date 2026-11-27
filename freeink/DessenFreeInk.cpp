@@ -135,7 +135,9 @@ Paint paint(uint32_t color) {
 
 TextStyle textStyle(uint32_t font, uint32_t align, uint32_t maxLines, uint32_t flags) {
   TextStyle st;
-  st.font = static_cast<FontId>(font <= DSN_FONT_TITLE ? font : DSN_FONT_SMALL);
+  st.font = static_cast<FontId>(font <= DSN_FONT_TITLE ||
+                                  (font >= DSN_FONT_NOTOSANS_12 && font <= DSN_FONT_NOTOSANS_18)
+                              ? font : DSN_FONT_SMALL);
   st.align = align == DSN_ALIGN_CENTER ? TextAlign::Center : align == DSN_ALIGN_RIGHT ? TextAlign::Right : TextAlign::Left;
   st.maxLines = static_cast<uint8_t>(maxLines < 1 ? 1 : maxLines > 16 ? 16 : maxLines);
   st.bold = flags & DSN_TEXT_BOLD;
