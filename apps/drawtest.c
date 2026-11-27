@@ -37,6 +37,16 @@ int main(void) {
   CHECK(13, dsn_bitmap(200, 10, 8, 8, large, sizeof large, 1, 32768, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
   CHECK(14, dsn_bitmap(200, 10, 0, 0, smiley, sizeof smiley, 8, 8, DSN_BITMAP_BW, DSN_BITMAP_CENTER, DSN_BLACK, 0) == -1);
 
+  // Fixed font IDs use the same selection for measurement and drawing.
+  for (int font = DSN_FONT_NOTOSANS_12; font <= DSN_FONT_NOTOSANS_18; ++font) {
+    int height = dsn_line_height(font);
+    unsigned size = dsn_measure_text("fixed", 5, font, 0);
+    CHECK(26, height > 0 && (int)(size & 0xffff) == height);
+    CHECK(27, dsn_text_box(0, 200, w, height, "fixed", 5, font, 0, 1, 0) == 0);
+  }
+  CHECK(28, dsn_line_height(255) == dsn_line_height(DSN_FONT_SMALL));
+  CHECK(29, dsn_text_box(0, 200, w, lh, "fallback", 8, 255, 0, 1, 0) == 0);
+
   // Button hints: the host's band fits the drawable area, and labels it
   // cannot draw are refused (a fifth line, a control byte, an overlong one).
   CHECK(21, d.hint_height <= h);

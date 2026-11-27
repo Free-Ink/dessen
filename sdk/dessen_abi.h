@@ -23,6 +23,11 @@
 #define DSN_FONT_SMALL 0
 #define DSN_FONT_BODY 1
 #define DSN_FONT_TITLE 2
+// Slot 3 is reserved for host label chrome. Fixed-size slots match FreeInkUI.
+#define DSN_FONT_NOTOSANS_12 4
+#define DSN_FONT_NOTOSANS_14 5
+#define DSN_FONT_NOTOSANS_16 6
+#define DSN_FONT_NOTOSANS_18 7
 
 #define DSN_ALIGN_LEFT 0
 #define DSN_ALIGN_CENTER 1
