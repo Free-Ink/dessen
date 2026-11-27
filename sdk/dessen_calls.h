@@ -127,3 +127,4 @@ static inline int dsn_book_progress(const void *path, int path_len) { return (in
 static inline int dsn_open_home(int dest) { return (int)dsn_call1(DSN_SYS_OPEN_HOME, (long)(((unsigned)dest & 0xff))); }
 static inline int dsn_wifi_connect(void) { return (int)dsn_call0(DSN_SYS_WIFI_CONNECT); }
 static inline int dsn_book_cover(const void *path, int path_len, int height, void *pixels, int pixels_len) { return (int)dsn_call5(DSN_SYS_BOOK_COVER, (long)path, path_len, (long)(((unsigned)height & 0xffff)), (long)pixels, pixels_len); }
+static inline int dsn_timer_set(unsigned interval_ms) { return (int)dsn_call1(DSN_SYS_TIMER_SET, (long)interval_ms); }

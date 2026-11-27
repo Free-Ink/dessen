@@ -156,6 +156,7 @@ surface:
 | `dsn_screen_width() / _height()` | Safe-area size |
 | `dsn_device(&info, sizeof info)` | Panel size, insets, touch/button flags, orientation, button-hint band |
 | `dsn_wait_event() -> e` | Block for the next event; decode with `DSN_EV_TYPE/X/Y(e)` |
+| `dsn_timer_set(interval_ms) -> i32` | Request periodic wake events (1000–3600000 ms; 0 disables) |
 | `dsn_exit(code)` | Quit (also happens if `main` returns) |
 | `dsn_random() -> u32` | Hardware random number |
 | `dsn_clear()` | White the whole panel |
@@ -804,3 +805,15 @@ shape, frontlight, a file read), you add **one line** to
 regenerates both the app-side wrapper and the firmware-side dispatch. See
 `AGENTS.md` for the recipe and the rules every new call must follow (clip, pin,
 bounds-check — every app value is untrusted).
+
+### Periodic wake events
+
+After `dsn_timer_set(ms)`, a supporting host schedules periodic monotonic
+wake-ups while the app waits in `dsn_wait_event()`. The host calls `enableTimerEvents()` to advertise its scheduler and reads
+`FreeInkHost::timerInterval()` and calls `markTimerElapsed()` immediately
+before a step when its deadline is due. The binding returns `DSN_EV_TIMER`
+only while waiting; real input wins, and missed ticks are not queued.
+Intervals outside 1000–3600000 ms are invalid, except zero (disable).
+Hosts without a scheduler return UNAVAILABLE for a nonzero interval. Reloading an app clears its timer. No background tasks or busy polling
+are created by the runtime. Firmware and desktop schedulers own deadlines
+and may defer wakes while suspended or asleep.

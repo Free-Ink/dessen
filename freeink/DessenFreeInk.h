@@ -51,6 +51,14 @@ class FreeInkHost {
   // the step consumes it whatever state the app is in.
   void markSideways() { sideways_ = true; }
 
+  // Host schedules monotonic wakes using this interval (0 disables). Mark
+  // elapsed immediately before step(); no catch-up or queued timer events.
+  // A host must opt in once it implements the scheduler.
+  void enableTimerEvents() { timerSupported_ = true; }
+  uint32_t timerInterval() const { return timerInterval_; }
+  void markTimerElapsed() { timerElapsed_ = true; }
+  int setTimerInterval(uint32_t interval);
+
   // Entropy for the app's random() call, e.g. esp_random. Without one the
   // app gets a weak fallback sequence, fine for tests and nothing else.
   void setRandom(uint32_t (*source)()) { random_ = source; }
@@ -111,6 +119,9 @@ class FreeInkHost {
   bool clipped_ = false;
   bool clipTouched_ = false;
   bool sideways_ = false;
+  uint32_t timerInterval_ = 0;
+  bool timerElapsed_ = false;
+  bool timerSupported_ = false;
 
  public:
   void randomBytesInto(uint8_t* out, uint32_t n); // fills from service or fallback
