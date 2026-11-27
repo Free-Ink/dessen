@@ -81,6 +81,7 @@ typedef struct {
 // On PREV/NEXT: the key was Left or Right rather than Up or Down. Apps that
 // read only DSN_EV_TYPE see the same PREV/NEXT either way.
 #define DSN_EV_SIDEWAYS 0x100u
+#define DSN_EV_TIMER 11  // opt-in periodic wake; no coordinates
 #define DSN_EV_TYPE(e) ((e) & 0xff)
 #define DSN_EV_X(e) (((e) >> 8) & 0xfff)
 #define DSN_EV_Y(e) (((e) >> 20) & 0xfff)

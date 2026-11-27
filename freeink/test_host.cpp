@@ -308,8 +308,47 @@ static void testManifest() {
   assert(parseRequires(R"({"requires":["stylus"]})", needs) && !meets(needs, true, true, true));
 }
 
+static void testTimer(const char* path) {
+  // Without a scheduler, a guest can detect the missing capability.
+  {
+    dessen::FreeInkHost unsupported;
+    assert(unsupported.load(mem, readApp(path), sizeof mem));
+    TraceTarget target;
+    DeviceContext dev;
+    dev.width = 400;
+    dev.height = 300;
+    InputSnapshot none;
+    assert(unsupported.step(target, dev, none) == dessen::State::Exited);
+    assert(unsupported.exitCode() == 0 && unsupported.timerInterval() == 0);
+  }
+  dessen::FreeInkHost host;
+  assert(host.load(mem, readApp(path), sizeof mem));
+  TraceTarget target;
+  DeviceContext dev;
+  dev.width = 400;
+  dev.height = 300;
+  host.enableTimerEvents();
+  InputSnapshot none, confirm, back;
+  confirm.confirm = true;
+  back.back = true;
+  auto step = [&](const InputSnapshot& in) { return host.step(target, dev, in); };
+  assert(step(none) == dessen::State::Waiting && host.timerInterval() == 1000);
+  assert(step(none) == dessen::State::Waiting);
+  host.markTimerElapsed();
+  assert(step(confirm) == dessen::State::Waiting);
+  assert(step(none) == dessen::State::Waiting && host.timerInterval() == 1000);
+  host.markTimerElapsed();
+  assert(step(none) == dessen::State::Waiting && host.timerInterval() == 5000);
+  host.markTimerElapsed();
+  assert(step(none) == dessen::State::Waiting && host.timerInterval() == 0);
+  host.markTimerElapsed();
+  assert(step(none) == dessen::State::Waiting);
+  assert(step(back) == dessen::State::Exited && host.exitCode() == 0);
+  assert(host.load(mem, readApp(path), sizeof mem) && host.timerInterval() == 0);
+}
+
 int main(int argc, char** argv) {
-  assert(argc == 9);
+  assert(argc == 10);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -504,6 +543,7 @@ int main(int argc, char** argv) {
   testDesktopStorage();
   testHome(argv[8]);
   testManifest();
+  testTimer(argv[9]);
 
   puts("freeink binding: PASS");
   return 0;

@@ -315,9 +315,19 @@ uint32_t FreeInkHost::nextRandom() {
 
 bool FreeInkHost::load(uint8_t* mem, uint32_t len, uint32_t memCap) {
   refresh_ = false;
+  timerInterval_ = 0;
+  timerElapsed_ = false;
   clipped_ = clipTouched_ = sideways_ = false;
   state_ = dvm_load(&vm_, mem, len, memCap) ? State::Running : State::Faulted;
   return state_ == State::Running;
+}
+
+int FreeInkHost::setTimerInterval(uint32_t interval) {
+  if (interval && (interval < 1000 || interval > 3600000)) return DSN_ERR_INVALID;
+  if (interval && !timerSupported_) return DSN_ERR_UNAVAILABLE;
+  timerInterval_ = interval;
+  timerElapsed_ = false;
+  return 0;
 }
 
 void FreeInkHost::randomBytesInto(uint8_t* out, uint32_t n) {
@@ -329,13 +339,16 @@ State FreeInkHost::step(DrawTarget& target, const DeviceContext& device, const I
                         uint32_t budget) {
   const bool sideways = sideways_; // about this step's input only, whatever the state
   sideways_ = false;
+  const bool timer = timerElapsed_ && timerInterval_ != 0;
+  timerElapsed_ = false;
   if (state_ == State::Exited || state_ == State::Faulted) return state_;
   if (state_ == State::Busy) {
     const int code = services_ ? services_->poll() : DSN_ERR_IO;
     if (code == kPending) return state_; // still working; try again next tick
     vm_.x[10] = static_cast<uint32_t>(code); // result ready: resume the VM below
   } else if (state_ == State::Waiting) {
-    const uint32_t ev = eventOf(input, viewOf(device), swipe, sideways);
+    uint32_t ev = eventOf(input, viewOf(device), swipe, sideways);
+    if (!ev && timer) ev = DSN_EV_TIMER;
     if (!ev) return state_;
     vm_.x[10] = ev; // wait_event's return value
   }

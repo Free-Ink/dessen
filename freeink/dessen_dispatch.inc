@@ -642,3 +642,10 @@ case 105: { // book_cover
   a[0] = result;
   break;
 }
+case 109: { // timer_set
+  const uint32_t interval_ms = static_cast<uint32_t>(a[0]); (void)interval_ms;
+  uint32_t result = 0;
+  result = self.setTimerInterval(interval_ms);
+  a[0] = result;
+  break;
+}

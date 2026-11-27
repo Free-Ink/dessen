@@ -103,3 +103,6 @@
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 103 wifi_connect() -> i32 : return self.beginWifi();
 105 book_cover(buf path, u16 height, out pixels) -> i32 : result = svcBookCover(self, path, path_len, height, pixels, pixels_len);
+
+# --- periodic application wake ---
+109 timer_set(u32 interval_ms) -> i32 : result = self.setTimerInterval(interval_ms);
