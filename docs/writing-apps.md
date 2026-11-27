@@ -203,7 +203,7 @@ behaviour in [`docs/proposed-capabilities.md`](proposed-capabilities.md). By gro
   on-screen keyboard and hands back the text.
 - **Storage** (the SD card; path rules enforced): `dsn_fs_read`,
   `dsn_fs_read_at(path, offset, out, len)` (ranged read — for files bigger than
-  app memory), `dsn_fs_write`, `dsn_fs_list`, `dsn_fs_delete`,
+  app memory), `dsn_fs_write`, `dsn_fs_list`, `dsn_fs_delete`, `dsn_fs_rename`, `dsn_screenshot`,
   `dsn_fs_app_dir` (your own plugin folder), `dsn_keystore`.
 - **Network:** `dsn_net_request` (one HTTPS request), `dsn_fetch_to_sd` (stream a
   URL straight to a file).
@@ -218,6 +218,25 @@ behaviour in [`docs/proposed-capabilities.md`](proposed-capabilities.md). By gro
 Text input, network, and key generation are **async**, but they look synchronous
 to your app: the firmware parks the VM while the work runs and resumes you with
 the result — just read the return value.
+
+### Capturing and moving files
+
+`dsn_screenshot(path, len)` captures the current framebuffer as a BMP at
+a new file path, returning 0 on success. An empty path probes support
+(1 if supported, or `DSN_ERR_UNAVAILABLE`). The host provides the actual
+capture implementation; the trace-only desktop runner has no framebuffer
+capture service.
+
+`dsn_fs_rename(source, source_len, destination, destination_len)` moves
+a regular file without copying it through the guest's memory. It returns
+0 on success and an existing destination is never replaced. The desktop
+implementation uses a no-replace link/unlink sequence; this is not an
+atomic replacement or a power-loss transaction.
+
+Both calls require the normal absolute guest paths and host authorization.
+Capture needs destination write permission; rename needs source read/delete
+and destination write permission. Hosts must reject protected paths.
+Applications own their backup, staging and recovery policies.
 
 ### Reading stats
 

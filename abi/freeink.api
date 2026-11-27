@@ -103,3 +103,7 @@
 101 open_home(u8 dest) -> i32   : return self.requestLaunchHome((int)dest);
 103 wifi_connect() -> i32 : return self.beginWifi();
 105 book_cover(buf path, u16 height, out pixels) -> i32 : result = svcBookCover(self, path, path_len, height, pixels, pixels_len);
+
+# --- additional storage services ---
+106 screenshot(buf path) -> i32 : result = svcScreenshot(self, path, path_len);
+107 fs_rename(buf source, buf dest) -> i32 : result = svcRename(self, source, source_len, dest, dest_len);

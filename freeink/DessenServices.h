@@ -50,6 +50,12 @@ class Services {
   virtual int fsWrite(const char*, const uint8_t*, uint32_t) { return -4; }
   virtual int fsList(const char*, char*, uint32_t) { return -4; }
   virtual int fsDelete(const char*) { return -4; }
+  // Capture the current framebuffer to a new BMP; nullptr probes support (1).
+  // Hosts must check destination write permission and deny protected paths.
+  virtual int screenshot(const char*) { return -4; }
+  // Move a regular file without replacing an existing destination.
+  // Hosts must authorize reading/deleting the source and writing the destination.
+  virtual int fsRename(const char*, const char*) { return -4; }
   virtual int fsAppDir(char*, uint32_t) { return -4; }
   // Store an opaque key for a content path (host-specific key store). `expires`
   // is Unix seconds, 0 = none.

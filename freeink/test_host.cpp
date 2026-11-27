@@ -129,6 +129,35 @@ static uint32_t readApp(const char* path) {
   return static_cast<uint32_t>(n);
 }
 
+static void testScreenshotDispatch(const char* path) {
+  struct CaptureServices : dessen::DesktopServices {
+    using DesktopServices::DesktopServices;
+    int probes = 0, captures = 0;
+    int screenshot(const char* dest) override {
+      if (!dest) { ++probes; return 1; }
+      ++captures;
+      assert(strcmp(dest, "/capture.bmp") == 0);
+      return 0;
+    }
+  };
+  namespace fs = std::filesystem;
+  std::string root = (fs::temp_directory_path() / "dessen-capture-XXXXXX").string();
+  assert(mkdtemp(root.data()));
+  CaptureServices svc(root);
+  dessen::FreeInkHost host;
+  assert(host.load(mem, readApp(path), sizeof mem));
+  host.setServices(&svc);
+  TraceTarget target;
+  DeviceContext dev;
+  dev.width = 480;
+  dev.height = 800;
+  InputSnapshot none;
+  while (host.step(target, dev, none) == dessen::State::Running) {}
+  assert(host.state() == dessen::State::Exited && host.exitCode() == 0);
+  assert(svc.probes == 1 && svc.captures == 1);
+  fs::remove_all(root);
+}
+
 static void testDesktopStorage() {
   namespace fs = std::filesystem;
   std::string prefix = (fs::temp_directory_path() / "dessen-storage-XXXXXX").string();
@@ -147,6 +176,15 @@ static void testDesktopStorage() {
   assert(service.fsWrite("/saved", original, sizeof original) == 0);
   assert(fixtureWriter.fsWrite("/example.test/book", replacement, sizeof replacement) == 0);
   assert(service.fsRead("/link", output, sizeof output) == DSN_ERR_IO);
+  assert(service.fsRename("/link", "/moved") == DSN_ERR_IO);
+  assert(service.fsRename("/saved", "/redirect/moved") == DSN_ERR_IO);
+  assert(service.fsRename("/redirect/example.test/book", "/moved") == DSN_ERR_IO);
+  assert(service.fsRename("/saved", "/link") == DSN_ERR_IO);
+  assert(service.fsRename("/saved", "/moved") == 0);
+  assert(service.fsRead("/saved", output, sizeof output) == DSN_ERR_IO);
+  assert(service.fsRead("/moved", output, sizeof output) == sizeof original);
+  assert(memcmp(output, original, sizeof original) == 0);
+  assert(service.fsRename("/moved", "/saved") == 0);
   assert(service.fsWrite("/redirect/untouched", original, sizeof original) == DSN_ERR_IO);
   assert(!fs::exists(fixtures / "untouched"));
   assert(service.fetchStart("https://example.test/book", "/link") == DSN_ERR_IO);
@@ -309,7 +347,7 @@ static void testManifest() {
 }
 
 int main(int argc, char** argv) {
-  assert(argc == 9);
+  assert(argc == 10);
   DeviceContext screen;
   screen.width = 480, screen.height = 800;
   TraceTarget target;
@@ -503,6 +541,7 @@ int main(int argc, char** argv) {
   testPkcs12();       // PKCS#12 parse + blob layout
   testDesktopStorage();
   testHome(argv[8]);
+  testScreenshotDispatch(argv[9]);
   testManifest();
 
   puts("freeink binding: PASS");
