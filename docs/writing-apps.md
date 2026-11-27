@@ -804,3 +804,28 @@ shape, frontlight, a file read), you add **one line** to
 regenerates both the app-side wrapper and the firmware-side dispatch. See
 `AGENTS.md` for the recipe and the rules every new call must follow (clip, pin,
 bounds-check — every app value is untrusted).
+
+### Host integration: suspend a parked asynchronous call
+
+A resource-constrained host can move a pending operation out of the guest's
+lifetime. After step() returns Busy, the host saves the full guest memory
+image and transfers or cancels the pending service, including copying any
+request bytes and recording checked guest offsets for output buffers.
+All workers must stop using guest pointers before suspendContinuation().
+The runtime then detaches guest memory and services; the host can free
+its allocation. A suspended runtime cannot execute or poll.
+
+After completing the operation, restore the full image into a new block,
+place the response at the validated output offsets, then call
+restoreContinuation(saved, memory, size, result). Install the appropriate
+services before stepping the guest. The call resumes immediately after the
+original ECALL; it does not rerun the request. On transport failure, use the
+appropriate negative result and resume normally.
+
+The continuation is a host-only in-memory value, not a persistent file
+format or a guest API. Hosts must authenticate and protect saved memory and
+metadata, bind them to the exact app, runtime build and permissions, avoid
+replay, and discard invalid or stale state. The VM does not perform storage,
+network transport, permission decisions, encryption, or reboot scheduling.
+Never restore an untrusted continuation or expose saved guest memory to
+other applications. No persistent state is created by the runtime.

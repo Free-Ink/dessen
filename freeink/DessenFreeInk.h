@@ -17,6 +17,7 @@ enum class State : uint8_t {
   Launch,  // the app asked the host to open a firmware screen and exit
   Exited,
   Faulted,
+  Suspended, // host detached guest RAM at an async-call boundary
 };
 
 // What a launcher/home app asked the host to open (see State::Launch). The host
@@ -80,6 +81,32 @@ class FreeInkHost {
   Launch launch() const { return launch_; }
   const char* launchPath() const { return launchPath_; }
   int launchHomeDest() const { return launchHomeDest_; } // DSN_HOME_* for Launch::Home
+
+  // Host-only continuation for a parked asynchronous call. Contains no host
+  // pointers and does not own the guest memory or the pending operation.
+  struct Continuation {
+    uint32_t version = 1;
+    uint32_t registers[32]{};
+    uint32_t pc = 0, memorySize = 0, fallbackSeed = 0;
+    uint64_t instructions = 0;
+    freeink::ui::Rect clip{};
+    bool clipped = false, refreshPending = false;
+  };
+
+  // The caller first saves the full guest block and independently transfers or
+  // cancels the outstanding service, ensuring no one retains guest pointers.
+  // On success the runtime detaches memory and services and cannot execute or
+  // poll until restored. The caller may then release its own allocation.
+  bool suspendContinuation(Continuation& out);
+
+  // Restore a trusted continuation and its full memory image (including BSS,
+  // heap and stack) after the caller has placed any async output in the image.
+  // Does not call load(), zero memory, or repeat the pending syscall. Only an
+  // idle/fresh or suspended host can restore. Reinstall host services separately.
+  // Persistence, integrity, app/firmware identity and authorization are the
+  // embedding host's responsibility; this struct is not an on-disk ABI.
+  bool restoreContinuation(const Continuation& saved, uint8_t* memory,
+                           uint32_t memorySize, int result);
 
   // True once after the app asked for the panel to be updated.
   bool takeRefreshRequest() {

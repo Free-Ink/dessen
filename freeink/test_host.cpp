@@ -78,6 +78,64 @@ static void testAsync(const char* appPath) {
   assert(net.polls >= 3);
 }
 
+static void testContinuation(const char* appPath) {
+  using Host = dessen::FreeInkHost;
+  using State = dessen::State;
+  for (bool success : {true, false}) {
+    std::vector<uint8_t> original(sizeof mem2);
+    FILE* f = fopen(appPath, "rb");
+    assert(f);
+    const auto n = static_cast<uint32_t>(fread(original.data(), 1, original.size(), f));
+    fclose(f);
+    ParkingNet net;
+    Host host;
+    assert(host.load(original.data(), n, original.size()));
+    host.setServices(&net);
+    Host::Continuation saved;
+    assert(!host.suspendContinuation(saved)); // not at an async boundary
+    TraceTarget target;
+    DeviceContext dev;
+    dev.width = 400;
+    dev.height = 300;
+    InputSnapshot none;
+    assert(host.step(target, dev, none) == State::Busy);
+    assert(net.resp && net.cap >= 9);
+    const uint32_t offset = net.resp - original.data();
+    assert(offset <= host.vm().mem_size - net.cap);
+    const uint32_t bytes = host.vm().mem_size;
+    const uint64_t instructions = host.vm().icount;
+    // Save memory and stop any guest-pointer users before detaching.
+    std::vector<uint8_t> restored(original.begin(), original.begin() + bytes);
+    net.resp = nullptr;
+    assert(host.suspendContinuation(saved));
+    assert(host.state() == State::Suspended && host.vm().mem == nullptr);
+    assert(host.services() == nullptr && saved.instructions == instructions);
+    std::vector<uint8_t>().swap(original); // free the original guest allocation
+    assert(host.step(target, dev, none) == State::Suspended && net.polls == 0);
+    assert(!host.suspendContinuation(saved));
+
+    // A fresh host models reconstruction after the original host was torn down.
+    Host rebuilt;
+    auto bad = saved;
+    bad.pc = bytes;
+    assert(!rebuilt.restoreContinuation(bad, restored.data(), bytes, 5));
+    bad = saved;
+    bad.version = 2;
+    assert(!rebuilt.restoreContinuation(bad, restored.data(), bytes, 5));
+    assert(!rebuilt.restoreContinuation(saved, restored.data(), bytes - 1, 5));
+    assert(!rebuilt.restoreContinuation(saved, restored.data(), bytes, dessen::kPending));
+    assert(rebuilt.state() == State::Exited && rebuilt.vm().mem == nullptr);
+    static const uint8_t response[] = {0, 200, 0, 0, 'r', 'e', 'a', 'd', 'y'};
+    if (success) memcpy(restored.data() + offset, response, sizeof response);
+    assert(rebuilt.restoreContinuation(saved, restored.data(), bytes, success ? 5 : DSN_ERR_IO));
+    assert(rebuilt.vm().icount == instructions);
+    assert(!rebuilt.restoreContinuation(saved, restored.data(), bytes, 5)); // no live overwrite
+    while (rebuilt.step(target, dev, none) == State::Running) {}
+    assert(rebuilt.state() == State::Exited && rebuilt.exitCode() == (success ? 0 : 1));
+    assert(net.polls == 0); // the original request was not run a second time
+  }
+}
+
 // Round-trips a PKCS#12 through DesktopServices::pkcs12Parse and checks the blob
 // layout (u16 key length, PKCS#8 key DER, X.509 cert DER).
 static void testPkcs12() {
@@ -500,6 +558,7 @@ int main(int argc, char** argv) {
   assert(!host.load(mem, 16, sizeof mem));
 
   testAsync(argv[7]); // kBusy parking/poll path
+  testContinuation(argv[7]);
   testPkcs12();       // PKCS#12 parse + blob layout
   testDesktopStorage();
   testHome(argv[8]);
